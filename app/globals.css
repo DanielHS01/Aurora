@@ -1,26 +1,191 @@
 @import "tailwindcss";
 
+.hero-title,
+.section-title,
+h1,
+h2,
+h3 {
+  font-family: var(--font-clash);
+}
+body {
+  font-family: var(--font-clash), sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --animation-iteration: infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.cosmic-parallax-container {
+  background: radial-gradient(ellipse at bottom, #111827 0%, #020202 65%, #000 100%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+.cosmic-stars,
+.cosmic-stars::after {
+  width: 1px;
+  height: 1px;
+  background: transparent;
+  animation: animStar 50s linear var(--animation-iteration);
+}
+
+.cosmic-stars::after {
+  content: "";
+  position: absolute;
+  top: 2000px;
+}
+
+.cosmic-stars-medium,
+.cosmic-stars-medium::after {
+  width: 2px;
+  height: 2px;
+  background: transparent;
+  animation: animStar 90s linear var(--animation-iteration);
+}
+
+.cosmic-stars-medium::after {
+  content: "";
+  position: absolute;
+  top: 2000px;
+}
+
+.cosmic-stars-large,
+.cosmic-stars-large::after {
+  width: 3px;
+  height: 3px;
+  background: transparent;
+  animation: animStar 140s linear var(--animation-iteration);
+}
+
+.cosmic-stars-large::after {
+  content: "";
+  position: absolute;
+  top: 2000px;
+}
+
+.cosmic-horizon {
+  position: absolute;
+  width: 160%;
+  height: 70%;
+  left: -30%;
+  bottom: -45%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.14), transparent 62%);
+}
+
+.cosmic-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.14), transparent 60%);
+  filter: blur(40px);
+}
+
+.cosmic-earth {
+  position: absolute;
+  width: 170%;
+  height: 65%;
+  left: -35%;
+  bottom: -50%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, #050505 0%, #000 70%);
+  box-shadow: 0 -40px 120px rgba(255,255,255,0.08);
+}
+
+.cosmic-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: clamp(5rem, 18vw, 14rem);
+  font-weight: 700;
+  line-height: 0.75;
+  letter-spacing: -0.09em;
+  text-align: center;
+  z-index: 2;
+}
+
+.cosmic-subtitle {
+  position: absolute;
+  left: 50%;
+  top: 67%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: clamp(0.8rem, 1.2vw, 1.05rem);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-align: center;
+  z-index: 2;
+}
+
+.cosmic-subtitle span {
+  display: inline-block;
+}
+
+.cosmic-subtitle-part-1 {
+  animation: animDont 6s ease-in-out var(--animation-iteration);
+}
+
+.cosmic-subtitle-part-2 {
+  animation: animLet 6s ease-in-out var(--animation-iteration);
+}
+
+.cosmic-subtitle-part-3 {
+  animation: animGo 6s ease-in-out var(--animation-iteration);
+}
+
+@keyframes animStar {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-2000px);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes animDont {
+  0%, 15% {
+    transform: translateY(-26px);
+    opacity: 0;
+  }
+  35%, 80% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  92%, 100% {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+}
+
+@keyframes animLet {
+  0%, 25% {
+    transform: translateY(-26px);
+    opacity: 0;
+  }
+  45%, 80% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  92%, 100% {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+}
+
+@keyframes animGo {
+  0%, 35% {
+    transform: translateY(-26px);
+    opacity: 0;
+  }
+  55%, 80% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  92%, 100% {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
 }
