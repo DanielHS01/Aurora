@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import LoginForm from "@/app/login/login-form";
 
 export default function LoginPage() {
@@ -9,7 +10,6 @@ export default function LoginPage() {
 
       {/* Esferas */}
       <div className="absolute right-[-12%] top-1/2 hidden h-[760px] w-[760px] -translate-y-1/2 rounded-full bg-white lg:block" />
-
       <div className="absolute right-[-9%] top-1/2 hidden h-[620px] w-[620px] -translate-y-1/2 rounded-full border border-black/10 bg-zinc-100 lg:block" />
 
       {/* Logo */}
@@ -26,19 +26,19 @@ export default function LoginPage() {
           <span className="mb-6 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.25em] text-white/50 backdrop-blur-xl">
             Acceso Aurora
           </span>
-
           <h1 className="text-6xl font-medium uppercase leading-[0.82] tracking-[-0.08em] md:text-8xl">
             Entra al centro operativo.
           </h1>
-
           <p className="mx-auto mt-8 max-w-md text-lg leading-8 text-white/50 lg:mx-0">
             De la landing al dashboard. Accede para gestionar atención,
             reservas, pedidos, pagos y analítica en tiempo real.
           </p>
         </div>
 
-        {/* Formulario */}
-        <LoginForm />
+        {/* Formulario envuelto en Suspense */}
+        <Suspense fallback={<div className="text-white/50">Cargando...</div>}>
+          <LoginForm />
+        </Suspense>
       </section>
     </main>
   );
