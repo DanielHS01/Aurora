@@ -2,6 +2,7 @@ import type { Tables, TablesInsert, TablesUpdate, Enums } from '@/lib/types/data
 
 // Filas (lo que devuelve un SELECT)
 export type Business = Tables<'businesses'>
+export type BusinessArea = Tables<'business_areas'>
 export type BusinessSettings = Tables<'business_settings'>
 export type BusinessUser = Tables<'business_users'>
 export type Profile = Tables<'profiles'>
