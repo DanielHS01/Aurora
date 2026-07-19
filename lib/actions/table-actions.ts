@@ -21,8 +21,9 @@ export async function createBusinessAreaAction(formData: FormData) {
     throw new Error('El nombre del área es obligatorio')
   }
 
-  await createBusinessArea({ business_id: businessId, name })
-  revalidatePath('/tables')
+  const area = await createBusinessArea({ business_id: businessId, name })
+  revalidatePath('/dashboard/tables')
+  return area
 }
 
 export async function createTableAction(formData: FormData) {
@@ -44,7 +45,7 @@ export async function createTableAction(formData: FormData) {
     capacity,
   })
 
-  revalidatePath('/tables')
+  revalidatePath('/dashboard/tables')
 }
 
 export async function updateTableAction(
@@ -63,7 +64,7 @@ export async function updateTableAction(
   }
 
   await updateTable(tableId, { table_number: tableNumber, capacity, area_id: areaId })
-  revalidatePath('/tables')
+  revalidatePath('/dashboard/tables')
 }
 
 export async function updateTableStatusAction(
@@ -73,11 +74,11 @@ export async function updateTableStatusAction(
 ) {
   await requireBusinessAccess(businessId)
   await updateTableStatus(tableId, status)
-  revalidatePath('/tables')
+  revalidatePath('/dashboard/tables')
 }
 
 export async function deleteTableAction(tableId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await deleteTable(tableId)
-  revalidatePath('/tables')
+  revalidatePath('/dashboard/tables')
 }

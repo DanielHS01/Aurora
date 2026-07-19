@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Rutas que NO requieren sesión. Todo lo demás se considera protegido.
-const PUBLIC_ROUTES = ['/','/login', '/register' , '/auth/callback', '/reset-password', '/update-password']
+const PUBLIC_ROUTES = ['/','/login', '/register' , '/auth/callback', '/auth/confirm', '/reset-password', '/update-password']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })

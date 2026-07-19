@@ -40,7 +40,7 @@ export async function createMenuCategoryAction(formData: FormData) {
     sort_order: sortOrder,
   })
 
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function updateMenuCategoryAction(
@@ -58,13 +58,13 @@ export async function updateMenuCategoryAction(
   }
 
   await updateMenuCategory(categoryId, { name, description })
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function deactivateMenuCategoryAction(categoryId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await deactivateMenuCategory(categoryId)
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 // ============================================================================
@@ -99,7 +99,7 @@ export async function createProductAction(formData: FormData) {
     preparation_time_minutes: preparationTime,
   })
 
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function updateProductAction(
@@ -122,13 +122,13 @@ export async function updateProductAction(
   }
 
   await updateProduct(productId, { name, description, price, category_id: categoryId })
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function deactivateProductAction(productId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await deactivateProduct(productId)
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 // ============================================================================
@@ -161,13 +161,13 @@ export async function createProductOptionAction(formData: FormData) {
     max_select: maxSelect,
   })
 
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function deleteProductOptionAction(optionId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await deleteProductOption(optionId)
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function createProductOptionValueAction(formData: FormData) {
@@ -189,11 +189,11 @@ export async function createProductOptionValueAction(formData: FormData) {
     extra_price: extraPrice,
   })
 
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
 
 export async function deleteProductOptionValueAction(valueId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await deleteProductOptionValue(valueId)
-  revalidatePath('/menu')
+  revalidatePath('/dashboard/menu')
 }
