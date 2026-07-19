@@ -8,6 +8,32 @@ type BusinessInsert = TablesInsert<'businesses'>
 type BusinessUpdate = TablesUpdate<'businesses'>
 type BusinessSettingsUpdate = TablesUpdate<'business_settings'>
 
+
+/**
+ * Trae el negocio del usuario actual, resolviendo primero su fila en
+ * business_users. Asume (por ahora) que el usuario pertenece a un solo
+ * negocio activo — si más adelante permites multi-negocio por usuario,
+ * esta función necesitará un businessId explícito o un selector de
+ * negocio activo en la sesión.
+ */
+export async function getCurrentUserBusiness(): Promise<Business | null> {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  const supabase = await createClient()
+
+  const { data: businessUser, error } = await supabase
+    .from('business_users')
+    .select('business_id')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (error || !businessUser) return null
+
+  return getBusinessById(businessUser.business_id)
+}
+
 /**
  * Trae un negocio por su id. Devuelve null si no existe o RLS lo bloquea
  * (el usuario no tiene acceso).

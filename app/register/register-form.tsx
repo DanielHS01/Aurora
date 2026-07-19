@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 
@@ -13,58 +12,60 @@ import {
   FiEyeOff,
   FiArrowRight,
   FiGrid,
+  FiBriefcase,
+  FiChevronDown,
+  FiCheckCircle,
 } from "react-icons/fi";
 
-import { createClient } from "@/lib/supabase/client";
+import { signUpAction } from "@/lib/actions/auth-actions";
+
+const BUSINESS_TYPES = [
+  { value: "restaurant", label: "Restaurante" },
+  { value: "barbershop", label: "Barbería" },
+  { value: "optical", label: "Óptica" },
+] as const;
+
+type BusinessType = (typeof BUSINESS_TYPES)[number]["value"];
 
 export default function RegisterForm() {
-  const router = useRouter();
-  const supabase = createClient();
-
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState("");
+  const [registered, setRegistered] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState(false);
-
-  const [name, setName] = useState("");
-
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-
+  const [businessName, setBusinessName] = useState("");
+  const [businessType, setBusinessType] = useState<BusinessType | "">("");
   const [password, setPassword] = useState("");
-
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
-
   const rotateX = useTransform(mouseY, [-250, 250], [7, -7]);
   const rotateY = useTransform(mouseX, [-250, 250], [-7, 7]);
 
-  const handleMouseMove = (
-    e: React.MouseEvent<HTMLDivElement>
-  ) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-
-    mouseX.set(
-      e.clientX - rect.left - rect.width / 2
-    );
-
-    mouseY.set(
-      e.clientY - rect.top - rect.height / 2
-    );
+    mouseX.set(e.clientX - rect.left - rect.width / 2);
+    mouseY.set(e.clientY - rect.top - rect.height / 2);
   };
 
-  async function handleSubmit(
-    e: React.FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
     setError("");
+
+    if (!businessType) {
+      setError("Selecciona el tipo de negocio.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Las contraseñas no coinciden.");
@@ -73,24 +74,58 @@ export default function RegisterForm() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-        },
-      },
-    });
+    try {
+      const formData = new FormData();
+      formData.set("fullName", fullName);
+      formData.set("email", email);
+      formData.set("password", password);
+      formData.set("businessName", businessName);
+      formData.set("businessType", businessType);
 
-    setLoading(false);
+      await signUpAction(formData);
 
-    if (error) {
-      setError(error.message);
-      return;
+      setRegistered(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Ocurrió un error inesperado."
+      );
+    } finally {
+      setLoading(false);
     }
+  }
 
-    router.push("/login?registered=true");
+  if (registered) {
+    return (
+      <motion.div
+        className="mx-auto w-full max-w-sm"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className="rounded-[2rem] border border-white/10 bg-black/55 p-8 text-center shadow-2xl backdrop-blur-2xl">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white text-black">
+            <FiCheckCircle size={21} />
+          </div>
+
+          <h2 className="text-2xl font-medium uppercase tracking-[-0.06em]">
+            Revisa tu correo
+          </h2>
+
+          <p className="mt-3 text-sm text-white/50">
+            Te enviamos un enlace de confirmación a{" "}
+            <span className="text-white">{email}</span>. Tu workspace se
+            creará en cuanto confirmes la cuenta.
+          </p>
+
+          <Link
+            href="/login"
+            className="mt-6 inline-flex items-center gap-2 text-sm text-white hover:underline"
+          >
+            Ir a iniciar sesión <FiArrowRight />
+          </Link>
+        </div>
+      </motion.div>
+    );
   }
 
   return (
@@ -128,129 +163,163 @@ export default function RegisterForm() {
           </div>
 
           {error && (
-            <div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div
+              role="alert"
+              className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+            >
               {error}
             </div>
           )}
 
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
-            <label className="block">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <label className="block" htmlFor="fullName">
               <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
                 Nombre
               </span>
-
               <div className="relative">
-                <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
-
+                <FiUser className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
                 <input
+                  id="fullName"
+                  name="fullName"
                   type="text"
+                  autoComplete="name"
                   required
-                  value={name}
-                  onChange={(e) =>
-                    setName(e.target.value)
-                  }
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none focus:border-white/30"
                 />
               </div>
             </label>
 
-            <label className="block">
+            <label className="block" htmlFor="email">
               <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
                 Email
               </span>
-
               <div className="relative">
-                <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
-
+                <FiMail className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
                 <input
+                  id="email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   required
                   value={email}
-                  onChange={(e) =>
-                    setEmail(e.target.value)
-                  }
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none"
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none focus:border-white/30"
                 />
               </div>
             </label>
 
-            <label className="block">
+            <label className="block" htmlFor="businessName">
+              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+                Nombre del negocio
+              </span>
+              <div className="relative">
+                <FiBriefcase className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <input
+                  id="businessName"
+                  name="businessName"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none focus:border-white/30"
+                />
+              </div>
+            </label>
+
+            <label className="block" htmlFor="businessType">
+              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+                Tipo de negocio
+              </span>
+              <div className="relative">
+                <FiGrid className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <select
+                  id="businessType"
+                  name="businessType"
+                  required
+                  value={businessType}
+                  onChange={(e) =>
+                    setBusinessType(e.target.value as BusinessType)
+                  }
+                  className="h-12 w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-10 text-sm text-white outline-none focus:border-white/30"
+                >
+                  <option value="" disabled className="bg-black text-white/40">
+                    Selecciona una opción
+                  </option>
+                  {BUSINESS_TYPES.map((type) => (
+                    <option
+                      key={type.value}
+                      value={type.value}
+                      className="bg-black text-white"
+                    >
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-white/35" />
+              </div>
+            </label>
+
+            <label className="block" htmlFor="password">
               <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
                 Contraseña
               </span>
-
               <div className="relative">
-                <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
-
+                <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
                 <input
-                  type={
-                    showPassword ? "text" : "password"
-                  }
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   required
+                  minLength={8}
                   value={password}
-                  onChange={(e) =>
-                    setPassword(e.target.value)
-                  }
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none"
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none focus:border-white/30"
                 />
-
                 <button
                   type="button"
-                  onClick={() =>
-                    setShowPassword(!showPassword)
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={
+                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
                   }
-                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
                 >
-                  {showPassword ? (
-                    <FiEyeOff />
-                  ) : (
-                    <FiEye />
-                  )}
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
             </label>
 
-            <label className="block">
+            <label className="block" htmlFor="confirmPassword">
               <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
                 Confirmar contraseña
               </span>
-
               <div className="relative">
-                <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
-
+                <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
                 <input
-                  type={
-                    showConfirmPassword
-                      ? "text"
-                      : "password"
-                  }
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   required
+                  minLength={8}
                   value={confirmPassword}
-                  onChange={(e) =>
-                    setConfirmPassword(
-                      e.target.value
-                    )
-                  }
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none"
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none focus:border-white/30"
                 />
-
                 <button
                   type="button"
-                  onClick={() =>
-                    setShowConfirmPassword(
-                      !showConfirmPassword
-                    )
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label={
+                    showConfirmPassword
+                      ? "Ocultar contraseña"
+                      : "Mostrar contraseña"
                   }
-                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
                 >
-                  {showConfirmPassword ? (
-                    <FiEyeOff />
-                  ) : (
-                    <FiEye />
-                  )}
+                  {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
             </label>
@@ -258,22 +327,16 @@ export default function RegisterForm() {
             <button
               type="submit"
               disabled={loading}
-              className="group flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-medium uppercase text-black transition hover:bg-zinc-200 disabled:opacity-70"
+              className="group flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-medium uppercase text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {loading
-                ? "Creando..."
-                : "Crear Workspace"}
-
+              {loading ? "Creando..." : "Crear Workspace"}
               <FiArrowRight className="transition group-hover:translate-x-1" />
             </button>
           </form>
 
           <p className="mt-6 text-center text-xs text-white/40">
             ¿Ya tienes una cuenta?{" "}
-            <Link
-              href="/login"
-              className="text-white hover:underline"
-            >
+            <Link href="/login" className="text-white hover:underline">
               Iniciar sesión
             </Link>
           </p>
