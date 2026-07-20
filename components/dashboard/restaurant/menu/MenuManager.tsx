@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react';
-import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { useMemo, useState } from 'react';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiX } from 'react-icons/fi';
 
 import { deactivateMenuCategoryAction } from '@/lib/actions/menu-actions';
 import { useRouter } from 'next/navigation';
@@ -26,6 +26,8 @@ export default function MenuManager({
 }: MenuManagerProps) {
   const router = useRouter();
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
     null
@@ -40,6 +42,28 @@ export default function MenuManager({
   );
   const [optionsProductId, setOptionsProductId] = useState<string | null>(
     null
+  );
+
+  // Filtra productos por nombre dentro de cada categoría. Si una
+  // categoría se queda sin productos tras el filtro, se oculta entera
+  // — así el mesero solo ve lo relevante, no categorías vacías.
+  const filteredCategories = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return categories;
+
+    return categories
+      .map((category) => ({
+        ...category,
+        products: category.products.filter((product) =>
+          product.name.toLowerCase().includes(query)
+        ),
+      }))
+      .filter((category) => category.products.length > 0);
+  }, [categories, searchQuery]);
+
+  const totalMatches = filteredCategories.reduce(
+    (sum, c) => sum + c.products.length,
+    0
   );
 
   // Helpers para resolver el objeto fresco a partir del id — así, tras un
@@ -69,20 +93,48 @@ export default function MenuManager({
 
   return (
     <div className="space-y-10">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-sm font-medium uppercase tracking-wide text-black/40">
           Categorías
         </h2>
-        <button
-          onClick={() => setShowCreateCategory(true)}
-          className="flex items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90"
-        >
-          <FiPlus size={16} />
-          Nueva categoría
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative w-full sm:w-64">
+            <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/30" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar plato..."
+              className="h-10 w-full rounded-xl border border-black/10 bg-black/[0.02] pl-9 pr-9 text-sm outline-none focus:border-black/30"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-black/30 hover:text-black"
+              >
+                <FiX size={16} />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowCreateCategory(true)}
+            className="flex shrink-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90"
+          >
+            <FiPlus size={16} />
+            Nueva categoría
+          </button>
+        </div>
       </div>
 
-      {categories.length === 0 && (
+      {searchQuery && (
+        <p className="-mt-6 text-xs text-black/40">
+          {totalMatches === 0
+            ? `Sin resultados para "${searchQuery}"`
+            : `${totalMatches} resultado(s) para "${searchQuery}"`}
+        </p>
+      )}
+
+      {filteredCategories.length === 0 && !searchQuery && (
         <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-black/10 rounded-3xl bg-gray-50/50">
           <p className="text-black/60 font-medium mb-4">
             Aún no tienes categorías en tu menú.
@@ -96,7 +148,7 @@ export default function MenuManager({
         </div>
       )}
 
-      {categories.map((category) => (
+      {filteredCategories.map((category) => (
         <section key={category.id}>
           <div className="mb-4 flex items-center justify-between">
             <div>

@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Rutas que NO requieren sesión. Todo lo demás se considera protegido.
-const PUBLIC_ROUTES = ['/','/login', '/register' , '/auth/callback', '/auth/confirm', '/reset-password', '/update-password']
+const PUBLIC_ROUTES = ['/','/login', '/register' , '/auth/callback', '/auth/confirm', '/auth/accept-invite', '/reset-password', '/update-password']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
 
   // Con sesión intentando entrar a /login → afuera, no tiene sentido verlo de nuevo
   if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/test-business', request.url))
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response

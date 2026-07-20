@@ -63,7 +63,7 @@ export async function createBusinessAction(formData: FormData) {
     throw err
   }
 
-  revalidatePath('/test-business')
+  revalidatePath('dashboard')
 }
 
 /**

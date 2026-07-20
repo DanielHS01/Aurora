@@ -18,7 +18,7 @@ export default function ConfirmEmailContent() {
 
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = searchParams.get("next") ?? "/test-business";
+  const next = searchParams.get("next") ?? "/dashboard";
 
   const handleConfirm = useCallback(async () => {
     if (!tokenHash || !type) {
