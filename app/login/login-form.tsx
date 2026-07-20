@@ -21,7 +21,7 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
 
   const redirectTo =
-    searchParams.get("redirectTo") ?? "/test-business";
+    searchParams.get("redirectTo") ?? "/dashboard";
 
   const supabase = createClient();
 
