@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 import { translateAuthError } from '@/lib/utils/auth-errors'
 import { generateBusinessSlug } from '@/lib/utils/slugify'
 import { createBusinessWithOwner } from '@/lib/queries/businesses'
+import { completeInvitedBusinessUser } from '@/lib/queries/business-users'
+import type { BusinessRole } from '@/lib/types'
 
 const ALLOWED_BUSINESS_TYPES = ['restaurant', 'barbershop', 'optical'] as const
 type BusinessType = (typeof ALLOWED_BUSINESS_TYPES)[number]
@@ -107,7 +109,42 @@ export async function completeBusinessSetupAction(): Promise<void> {
     },
   })
 }
+export async function completeEmployeeInviteAction(password: string): Promise<void> {
+  const supabase = await createClient()
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('No autenticado')
+  }
+
+  // Los usuarios invitados no tienen contraseña todavía — la establecen
+  // en este mismo paso, antes de quedar vinculados al negocio.
+  const { error: passwordError } = await supabase.auth.updateUser({ password })
+  if (passwordError) {
+    throw new Error(translateAuthError(passwordError.message))
+  }
+
+  const meta = user.user_metadata ?? {}
+  const pendingBusinessId = meta.pending_business_id as string | undefined
+  const pendingRole = meta.pending_business_role as string | undefined
+
+  if (!pendingBusinessId || !pendingRole) {
+    return
+  }
+
+  await completeInvitedBusinessUser(
+    pendingBusinessId,
+    user.id,
+    pendingRole as BusinessRole
+  )
+
+  await supabase.auth.updateUser({
+    data: { pending_business_id: null, pending_business_role: null },
+  })
+}
 export async function signInAction(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -120,7 +157,7 @@ export async function signInAction(formData: FormData) {
     throw new Error(translateAuthError(error.message))
   }
 
-  redirect('/test-business')
+  redirect('/dashboard')
 }
 
 export async function signOutAction() {
@@ -159,5 +196,5 @@ export async function updatePasswordAction(formData: FormData) {
     throw new Error(translateAuthError(error.message))
   }
 
-  redirect('/test-business')
+  redirect('/dashboard')
 }

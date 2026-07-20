@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
 import { getCurrentUserBusiness } from '@/lib/queries/businesses';
+import { getCurrentUserRole } from '@/lib/queries/business-users';
 
 export default async function DashboardLayout({
   children,
@@ -9,16 +10,15 @@ export default async function DashboardLayout({
 }) {
   const business = await getCurrentUserBusiness();
 
-  // Si el usuario no pertenece a ningún negocio activo (ej. la creación
-  // falló tras confirmar el correo), lo mandamos a completarlo en vez
-  // de dejarlo ver un dashboard vacío o roto.
   if (!business) {
     redirect('/setup-business');
   }
 
+  const role = await getCurrentUserRole(business.id);
+
   return (
     <div
-      className="flex h-screen bg-[#FDFDFD]"
+      className="flex h-screen flex-col bg-[#FDFDFD] md:flex-row"
       style={
         {
           '--brand-primary': business.primary_color || '#000000',
@@ -30,9 +30,12 @@ export default async function DashboardLayout({
         businessName={business.name}
         logoUrl={business.logo_url}
         businessType={business.business_type}
+        userRole={role}
       />
 
-      <main className="flex-1 overflow-y-auto p-8 min-h-0">{children}</main>
+      <main className="flex-1 overflow-y-auto p-4 min-h-0 md:p-8">
+        {children}
+      </main>
     </div>
   );
 }

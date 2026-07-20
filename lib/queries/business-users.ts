@@ -206,3 +206,58 @@ async function isOnlyActiveOwner(businessId: string, userId: string): Promise<bo
   const owners = data.map((row) => row.user_id)
   return owners.length === 1 && owners[0] === userId
 }
+/**
+ * Invita a un empleado por correo real usando el mecanismo de invitación
+ * de Supabase Auth (crea el usuario sin contraseña y le manda un correo).
+ * Guarda el negocio y rol asignados como metadata "pendiente" — se
+ * resuelve en completeEmployeeInviteAction cuando el empleado acepta.
+ * Usa admin client porque inviteUserByEmail es una operación privilegiada.
+ */
+export async function inviteBusinessUser(
+  businessId: string,
+  email: string,
+  fullName: string,
+  role: BusinessRole
+): Promise<void> {
+  const supabase = createAdminClient()
+
+  const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+    data: {
+      full_name: fullName,
+      pending_business_id: businessId,
+      pending_business_role: role,
+    },
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/accept-invite`,
+  })
+
+  if (error) {
+    throw new Error(`Error invitando usuario: ${error.message}`)
+  }
+}
+
+/**
+ * Vincula un usuario recién invitado a su negocio, con el rol que se le
+ * asignó al invitarlo. A diferencia de addUserToBusiness, esto NO exige
+ * que quien llama ya sea admin/owner — porque quien llama es el propio
+ * empleado recién invitado, que todavía no tiene ningún rol en el negocio.
+ * La validación real ya ocurrió cuando el owner/admin envió la invitación.
+ * Usa admin client por el mismo motivo que createBusinessWithOwner.
+ */
+export async function completeInvitedBusinessUser(
+  businessId: string,
+  userId: string,
+  role: BusinessRole
+): Promise<BusinessUser> {
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase
+    .from('business_users')
+    .insert({ business_id: businessId, user_id: userId, role })
+    .select()
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Error vinculando usuario al negocio: ${error?.message}`)
+  }
+  return data
+}
