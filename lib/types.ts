@@ -20,6 +20,7 @@ export type KitchenTicket = Tables<'kitchen_tickets'>
 export type Reservation = Tables<'reservations'>
 export type Payment = Tables<'payments'>
 export type Invoice = Tables<'invoices'>
+export type InvoiceUpdate = TablesUpdate<'invoices'>
 export type InvoiceItem = Tables<'invoice_items'>
 export type AiAgent = Tables<'ai_agents'>
 export type AiConversation = Tables<'ai_conversations'>
@@ -28,6 +29,7 @@ export type AiAction = Tables<'ai_actions'>
 export type Plan = Tables<'plans'>
 export type Subscription = Tables<'subscriptions'>
 export type ActivityLog = Tables<'activity_logs'>
+export type OrderSource = Enums<'order_source'>
 
 // Inserts (lo que mandas para crear una fila)
 export type ProductInsert = TablesInsert<'products'>
