@@ -188,9 +188,41 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
   if (error || !data) {
     throw new Error(`Error actualizando estado del pedido: ${error?.message}`)
   }
+
+  // Propaga a los ítems solo en los estados donde todos deben quedar
+  // igual al pedido — el resto del flujo (confirmed, preparing, ready)
+  // ya se rastrea a nivel de kitchen_tickets, no aquí.
+  if (status === 'served' || status === 'completed' || status === 'cancelled') {
+    await syncOrderItemsStatus(orderId, status)
+  }
+
   return data
 }
 
 export async function cancelOrder(orderId: string): Promise<Order> {
   return updateOrderStatus(orderId, 'cancelled')
+}
+/**
+ * Propaga el status del pedido a todos sus order_items — se llama cada
+ * vez que el pedido cambia de estado (cancelado, servido, completado),
+ * para que los ítems individuales reflejen el mismo momento del ciclo
+ * de vida en vez de quedar congelados en "pending" para siempre.
+ * Solo se llama para los estados donde tiene sentido que TODOS los
+ * ítems cambien a la vez — no para "confirmed"/"preparing", donde el
+ * seguimiento fino ya lo hace kitchen_tickets, no order_items.
+ */
+async function syncOrderItemsStatus(
+  orderId: string,
+  status: 'cancelled' | 'served' | 'completed'
+): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('order_items')
+    .update({ status })
+    .eq('order_id', orderId)
+
+  if (error) {
+    throw new Error(`Error sincronizando ítems del pedido: ${error.message}`)
+  }
 }

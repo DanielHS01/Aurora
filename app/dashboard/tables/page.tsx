@@ -3,6 +3,7 @@ import { getRestaurantTables, getBusinessAreas } from '@/lib/queries/tables';
 import { createClient } from '@/lib/supabase/server';
 import AreaManager from '@/components/dashboard/restaurant/AreaManager';
 import TableGrid, { type TableWithOrder } from '@/components/dashboard/restaurant/TableGrid';
+import RealtimeOrdersListener from '@/components/dashboard/restaurant/RealtimeOrdersListener';
 
 export default async function TablesPage() {
   const business = await getCurrentUserBusiness();
@@ -30,6 +31,7 @@ export default async function TablesPage() {
 
   return (
     <div>
+      <RealtimeOrdersListener businessId={business.id} />
       <header className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">Mesas</h1>
         <p className="mt-1 text-sm text-black/40">

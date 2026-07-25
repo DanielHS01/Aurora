@@ -1,12 +1,17 @@
 'use client'
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FiPlus, FiEdit2 } from 'react-icons/fi';
+
 import type { BusinessArea } from '@/lib/types';
 import type { RestaurantTableWithArea } from '@/lib/queries/tables';
 import type { Database } from '@/lib/types/database.types';
+import { createOrderAction } from '@/lib/actions/order-actions';
+import { markOrderServedAction } from '@/lib/actions/kitchen-actions';
 import CreateTableModal from './CreateTableModal';
 import EditTableModal from './EditTableModal';
+import CheckoutModal from './orders/CheckoutModal';
 
 type Order = Database['public']['Tables']['orders']['Row'];
 type OrderItem = Database['public']['Tables']['order_items']['Row'];
@@ -123,6 +128,7 @@ export default function TableGrid({
                 <p className="text-xs opacity-50 mt-1">
                   {(table.activeOrder.order_items ?? []).length} ítem(s) · $
                   {(table.activeOrder.total ?? 0).toLocaleString('es-CO')}
+                  {table.activeOrder.status === 'ready' && ' · 🍽️ Listo'}
                 </p>
               )}
             </button>
@@ -132,6 +138,7 @@ export default function TableGrid({
 
       {selectedTable && (
         <TableDetailModal
+          businessId={businessId}
           table={selectedTable}
           onClose={() => setSelectedTable(null)}
           onEdit={() => {
@@ -162,15 +169,53 @@ export default function TableGrid({
 }
 
 function TableDetailModal({
+  businessId,
   table,
   onClose,
   onEdit,
 }: {
+  businessId: string;
   table: TableWithOrder;
   onClose: () => void;
   onEdit: () => void;
 }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showCheckout, setShowCheckout] = useState(false);
+
   const orderItems = table.activeOrder?.order_items ?? [];
+
+  async function handleNewOrder() {
+    setLoading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.set('businessId', businessId);
+      formData.set('tableId', table.id);
+      formData.set('orderType', 'dine_in');
+
+      const order = await createOrderAction(formData);
+      router.push(`/dashboard/orders/${order.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setLoading(false);
+    }
+  }
+
+  async function handleMarkServed() {
+    if (!table.activeOrder) return;
+    setLoading(true);
+    setError('');
+    try {
+      await markOrderServedAction(table.activeOrder.id, businessId);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div
@@ -194,6 +239,15 @@ function TableDetailModal({
           {table.capacity} personas
           {table.area && ` · ${table.area.name}`}
         </p>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+          >
+            {error}
+          </div>
+        )}
 
         {table.activeOrder ? (
           <div className="space-y-3">
@@ -228,22 +282,77 @@ function TableDetailModal({
           </p>
         )}
 
-        <div className="mt-6 flex gap-2">
-          <button
-            onClick={onEdit}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-black/10 py-2.5 text-sm font-medium text-black/70 hover:bg-black/5"
-          >
-            <FiEdit2 size={14} />
-            Editar
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-xl bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-secondary)]"
-          >
-            Cerrar
-          </button>
+        <div className="mt-6 flex flex-col gap-2">
+          {!table.activeOrder && (
+            <button
+              onClick={handleNewOrder}
+              disabled={loading}
+              className="w-full rounded-xl bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-secondary)] disabled:opacity-60"
+            >
+              {loading ? 'Creando...' : 'Nuevo pedido'}
+            </button>
+          )}
+
+          {table.activeOrder && (
+            <>
+              <button
+                onClick={() =>
+                  router.push(`/dashboard/orders/${table.activeOrder!.id}`)
+                }
+                className="w-full rounded-xl border border-black/10 py-2.5 text-sm font-medium text-black/70 hover:bg-black/5"
+              >
+                Ver / editar pedido
+              </button>
+
+              {table.activeOrder.status === 'ready' && (
+                <button
+                  onClick={handleMarkServed}
+                  disabled={loading}
+                  className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {loading ? 'Procesando...' : '🍽️ Recoger pedido'}
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowCheckout(true)}
+                className="w-full rounded-xl bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-secondary)]"
+              >
+                💳 Cobrar
+              </button>
+            </>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={onEdit}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-black/10 py-2.5 text-sm font-medium text-black/70 hover:bg-black/5"
+            >
+              <FiEdit2 size={14} />
+              Editar mesa
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-black/10 py-2.5 text-sm font-medium text-black/60"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
+
+      {showCheckout && table.activeOrder && (
+        <CheckoutModal
+          businessId={businessId}
+          orderId={table.activeOrder.id}
+          tableId={table.id}
+          total={table.activeOrder.total ?? 0}
+          onClose={() => {
+            setShowCheckout(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }
