@@ -41,7 +41,7 @@ export async function createReservationAction(formData: FormData) {
     source,
   })
 
-  revalidatePath('/reservations')
+  revalidatePath('/dashboard/reservations')
   return reservation
 }
 
@@ -70,7 +70,7 @@ export async function updateReservationAction(
     notes,
   })
 
-  revalidatePath('/reservations')
+  revalidatePath('/dashboard/reservations')
 }
 
 export async function updateReservationStatusAction(
@@ -80,13 +80,13 @@ export async function updateReservationStatusAction(
 ) {
   await requireBusinessAccess(businessId)
   await updateReservationStatus(reservationId, status)
-  revalidatePath('/reservations')
+  revalidatePath('/dashboard/reservations')
 }
 
 export async function cancelReservationAction(reservationId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await cancelReservation(reservationId)
-  revalidatePath('/reservations')
+  revalidatePath('/dashboard/reservations')
 }
 
 /**
@@ -99,7 +99,7 @@ export async function convertReservationToOrderAction(
 ) {
   await requireBusinessAccess(businessId)
   const { orderId } = await convertReservationToOrder(reservationId)
-  revalidatePath('/reservations')
-  revalidatePath('/orders')
+  revalidatePath('/dashboard/reservations')
+  revalidatePath('/dashboard/tables')
   return { orderId }
 }

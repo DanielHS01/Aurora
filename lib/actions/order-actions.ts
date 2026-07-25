@@ -9,6 +9,7 @@ import {
   updateOrderStatus,
   cancelOrder,
 } from '@/lib/queries/orders'
+import { updateTableStatus } from '@/lib/queries/tables'
 import type { OrderStatus, OrderType } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 
@@ -27,7 +28,13 @@ export async function createOrderAction(formData: FormData) {
     order_type: orderType,
   })
 
-  revalidatePath('/orders')
+  // La mesa pasa a "ocupada" en cuanto se abre un pedido sobre ella —
+  // no hay trigger en la DB que haga esto, así que lo hace el código.
+  if (tableId) {
+    await updateTableStatus(tableId, 'occupied')
+  }
+
+  revalidatePath('/dashboard/tables')
   return order
 }
 
@@ -51,7 +58,6 @@ export async function addOrderItemAction(businessId: string, formData: FormData)
     throw new Error('La cantidad debe ser al menos 1')
   }
 
-  // Las opciones seleccionadas se esperan como JSON serializado en el form
   const optionsRaw = formData.get('options') as string | null
   const options = optionsRaw ? JSON.parse(optionsRaw) : []
 
@@ -66,7 +72,7 @@ export async function addOrderItemAction(businessId: string, formData: FormData)
     options
   )
 
-  revalidatePath(`/orders/${orderId}`)
+  revalidatePath(`/dashboard/orders/${orderId}`)
   return item
 }
 
@@ -77,7 +83,7 @@ export async function removeOrderItemAction(
 ) {
   await requireBusinessAccess(businessId)
   await removeOrderItem(orderItemId, orderId)
-  revalidatePath(`/orders/${orderId}`)
+  revalidatePath(`/dashboard/orders/${orderId}`)
 }
 
 export async function updateOrderItemQuantityAction(
@@ -93,23 +99,39 @@ export async function updateOrderItemQuantityAction(
   }
 
   await updateOrderItemQuantity(orderItemId, orderId, quantity)
-  revalidatePath(`/orders/${orderId}`)
+  revalidatePath(`/dashboard/orders/${orderId}`)
 }
 
 export async function updateOrderStatusAction(
   orderId: string,
   businessId: string,
-  status: OrderStatus
+  status: OrderStatus,
+  tableId?: string | null
 ) {
   await requireBusinessAccess(businessId)
   await updateOrderStatus(orderId, status)
-  revalidatePath(`/orders/${orderId}`)
-  revalidatePath('/orders')
+
+  // Al completar o cancelar el pedido, la mesa vuelve a estar libre.
+  if (tableId && (status === 'completed' || status === 'cancelled')) {
+    await updateTableStatus(tableId, 'available')
+  }
+
+  revalidatePath(`/dashboard/orders/${orderId}`)
+  revalidatePath('/dashboard/tables')
 }
 
-export async function cancelOrderAction(orderId: string, businessId: string) {
+export async function cancelOrderAction(
+  orderId: string,
+  businessId: string,
+  tableId?: string | null
+) {
   await requireBusinessAccess(businessId)
   await cancelOrder(orderId)
-  revalidatePath(`/orders/${orderId}`)
-  revalidatePath('/orders')
+
+  if (tableId) {
+    await updateTableStatus(tableId, 'available')
+  }
+
+  revalidatePath(`/dashboard/orders/${orderId}`)
+  revalidatePath('/dashboard/tables')
 }

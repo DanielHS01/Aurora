@@ -1,12 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import type { KitchenTicket, KitchenTicketStatus, Order } from '@/lib/types'
 import type { TablesInsert, TablesUpdate } from '@/lib/types/database.types'
+import type { OrderWithItems } from './orders'
 
 type KitchenTicketInsert = TablesInsert<'kitchen_tickets'>
 type KitchenTicketUpdate = TablesUpdate<'kitchen_tickets'>
 
 export type KitchenTicketWithOrder = KitchenTicket & {
-  order: Order
+  order: OrderWithItems & { table: { table_number: string } | null }
 }
 
 /**
@@ -21,7 +22,9 @@ export async function getActiveKitchenTickets(
 
   const { data, error } = await supabase
     .from('kitchen_tickets')
-    .select('*, order:orders(*)')
+    .select(
+      '*, order:orders(*, items:order_items(*, options:order_item_options(*)), table:restaurant_tables(table_number))'
+    )
     .eq('business_id', businessId)
     .not('status', 'in', '(delivered,cancelled)')
     .order('sent_at', { ascending: true })

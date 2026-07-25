@@ -9,6 +9,9 @@ import {
 } from '@/lib/queries/payments'
 import type { PaymentMethod, PaymentStatus } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import { updateOrderStatus } from '@/lib/queries/orders'
+import { updateTableStatus } from '@/lib/queries/tables'
+import type { InvoiceWithItems } from '@/lib/queries/payments'
 
 export async function recordPaymentAction(businessId: string, formData: FormData) {
   await requireBusinessAccess(businessId)
@@ -43,14 +46,15 @@ export async function updatePaymentStatusAction(
 ) {
   await requireBusinessAccess(businessId)
   await updatePaymentStatus(paymentId, orderId, status)
-  revalidatePath(`/orders/${orderId}`)
+  revalidatePath(`/dashboard/orders/${orderId}`)
+revalidatePath('/dashboard/tables')
 }
 
 export async function createInvoiceFromOrderAction(orderId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   const invoice = await createInvoiceFromOrder(orderId)
-  revalidatePath(`/orders/${orderId}`)
-  revalidatePath('/invoices')
+  revalidatePath(`/dashboard/orders/${orderId}`)
+revalidatePath('/dashboard/invoices')
   return invoice
 }
 
@@ -62,5 +66,44 @@ export async function updateInvoiceStatusAction(
 ) {
   await requireBusinessAccess(businessId)
   await updateInvoiceStatus(invoiceId, status, pdfUrl)
-  revalidatePath('/invoices')
+  revalidatePath('/dashboard/invoices')
+}
+/**
+ * Flujo completo de cobro: registra el pago, genera la factura, cierra
+ * el pedido y libera la mesa — en ese orden. Si el pago se registra
+ * pero algo falla después (ej. generar factura), el pedido queda
+ * marcado como pagado pero no completado; no revertimos el pago
+ * automáticamente para evitar descuadres de caja silenciosos — un
+ * fallo aquí debe resolverse manualmente, no reintentarse solo.
+ */
+export async function checkoutOrderAction(
+  businessId: string,
+  orderId: string,
+  tableId: string | null,
+  formData: FormData
+): Promise<{ invoice: InvoiceWithItems }> {
+  await requireBusinessAccess(businessId)
+
+  const amount = Number(formData.get('amount'))
+  const method = formData.get('method') as PaymentMethod
+
+  if (isNaN(amount) || amount <= 0) {
+    throw new Error('El monto debe ser un número mayor a 0')
+  }
+  if (!method) {
+    throw new Error('El método de pago es obligatorio')
+  }
+
+  await recordPayment(businessId, orderId, amount, method)
+  const invoice = await createInvoiceFromOrder(orderId)
+  await updateOrderStatus(orderId, 'completed')
+
+  if (tableId) {
+    await updateTableStatus(tableId, 'available')
+  }
+
+  revalidatePath('/dashboard/tables')
+  revalidatePath('/dashboard/reports')
+
+  return { invoice }
 }
