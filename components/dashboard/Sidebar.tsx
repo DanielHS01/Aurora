@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { FiLogOut, FiSettings, FiMenu, FiX } from 'react-icons/fi';
 
 import { signOutAction } from '@/lib/actions/auth-actions';
+import { cloudinaryTransform, LOGO_THUMBNAIL } from '@/lib/utils/cloudinary';
 
 interface SidebarProps {
   businessName: string;
@@ -149,12 +150,12 @@ function BusinessBadge({
   if (logoUrl) {
     return (
       <Image
-        src={logoUrl}
-        alt={businessName}
-        width={size}
-        height={size}
-        className="rounded-lg object-cover"
-      />
+  src={cloudinaryTransform(logoUrl, LOGO_THUMBNAIL)}
+  alt={businessName}
+  width={size}
+  height={size}
+  className="rounded-lg object-cover"
+/>
     );
   }
   return (

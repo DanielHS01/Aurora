@@ -6,6 +6,7 @@ import { FiX } from 'react-icons/fi';
 
 import { updateProductAction } from '@/lib/actions/menu-actions';
 import type { CategoryWithProducts } from '@/lib/queries/menu';
+import ProductImageUploader from './ProductImageUploader';
 
 type ProductWithOptions = CategoryWithProducts['products'][number];
 
@@ -86,6 +87,11 @@ export default function EditProductModal({
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <label className="block" htmlFor="editProductName">
+            <ProductImageUploader
+              businessId={businessId}
+              productId={product.id}
+              currentImageUrl={product.image_url}
+            />
             <span className="mb-2 block text-xs uppercase tracking-wide text-black/40">
               Nombre
             </span>

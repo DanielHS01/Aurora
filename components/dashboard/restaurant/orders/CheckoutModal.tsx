@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiX, FiCheckCircle, FiCreditCard } from 'react-icons/fi';
 
@@ -31,12 +31,27 @@ export default function CheckoutModal({
 }: CheckoutModalProps) {
   const router = useRouter();
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [cashReceived, setCashReceived] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
 
+  const cashReceivedNumber = Number(cashReceived) || 0;
+  const change = useMemo(
+    () => Math.max(cashReceivedNumber - total, 0),
+    [cashReceivedNumber, total]
+  );
+  const isCashInsufficient =
+    method === 'cash' && cashReceived !== '' && cashReceivedNumber < total;
+
   async function handleConfirm() {
     setError('');
+
+    if (method === 'cash' && cashReceivedNumber < total) {
+      setError('El monto recibido es menor al total a cobrar.');
+      return;
+    }
+
     setLoading(true);
     try {
       const formData = new FormData();
@@ -114,11 +129,15 @@ export default function CheckoutModal({
             <p className="mb-2 text-xs uppercase tracking-wide text-black/40">
               Método de pago
             </p>
-            <div className="mb-6 grid grid-cols-2 gap-2">
+            <div className="mb-4 grid grid-cols-2 gap-2">
               {PAYMENT_METHODS.map((m) => (
                 <button
                   key={m.value}
-                  onClick={() => setMethod(m.value)}
+                  onClick={() => {
+                    setMethod(m.value);
+                    setCashReceived('');
+                    setError('');
+                  }}
                   className={`rounded-xl border px-3 py-2.5 text-sm transition ${
                     method === m.value
                       ? 'border-black bg-black text-white'
@@ -130,9 +149,52 @@ export default function CheckoutModal({
               ))}
             </div>
 
+            {method === 'cash' && (
+              <div className="mb-6 space-y-2">
+                <label className="block" htmlFor="cashReceived">
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-black/40">
+                    Monto recibido
+                  </span>
+                  <input
+                    id="cashReceived"
+                    type="number"
+                    min={0}
+                    step="100"
+                    autoFocus
+                    value={cashReceived}
+                    onChange={(e) => setCashReceived(e.target.value)}
+                    placeholder={total.toString()}
+                    className={`h-12 w-full rounded-xl border bg-black/[0.02] px-4 text-sm outline-none focus:border-black/30 ${
+                      isCashInsufficient ? 'border-red-300' : 'border-black/10'
+                    }`}
+                  />
+                </label>
+
+                {cashReceived !== '' && (
+                  <div
+                    className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
+                      isCashInsufficient
+                        ? 'bg-red-50 text-red-600'
+                        : 'bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    <span>
+                      {isCashInsufficient ? 'Falta' : 'Cambio a devolver'}
+                    </span>
+                    <span className="text-lg font-semibold">
+                      $
+                      {isCashInsufficient
+                        ? (total - cashReceivedNumber).toLocaleString('es-CO')
+                        : change.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleConfirm}
-              disabled={loading}
+              disabled={loading || isCashInsufficient}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)] disabled:opacity-60"
             >
               <FiCreditCard size={15} />
