@@ -1,7 +1,8 @@
-'use client'
+"use client";
 
-import { FiImage } from 'react-icons/fi';
-import type { Product } from '@/lib/types';
+import { FiImage } from "react-icons/fi";
+import type { Product } from "@/lib/types";
+import { cloudinaryTransform, MENU_THUMBNAIL } from "@/lib/utils/cloudinary";
 
 interface ProductCardProps {
   product: Product;
@@ -18,7 +19,7 @@ export default function ProductCard({ product, onClick }: ProductCardProps) {
         {product.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={product.image_url}
+            src={cloudinaryTransform(product.image_url, MENU_THUMBNAIL)}
             alt={product.name}
             className="h-full w-full object-cover"
           />
@@ -34,7 +35,7 @@ export default function ProductCard({ product, onClick }: ProductCardProps) {
           </p>
         )}
         <p className="mt-2 text-sm font-medium">
-          ${product.price.toLocaleString('es-CO')}
+          ${product.price.toLocaleString("es-CO")}
         </p>
       </div>
     </button>

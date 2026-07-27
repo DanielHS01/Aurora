@@ -128,3 +128,19 @@ export async function updateBusinessBrandingAction(formData: FormData) {
   revalidatePath('/dashboard/account')
   revalidatePath('/dashboard')
 }
+export async function updateBusinessLogoAction(logoUrl: string) {
+  const business = await getCurrentUserBusiness()
+  if (!business) {
+    throw new Error('No se encontró tu negocio')
+  }
+
+  const role = await getCurrentUserRole(business.id)
+  if (!role || !ROLES_THAT_CAN_EDIT_BUSINESS.includes(role)) {
+    throw new Error('No tienes permiso para editar el logo del negocio')
+  }
+
+  await updateBusiness(business.id, { logo_url: logoUrl })
+
+  revalidatePath('/dashboard/account')
+  revalidatePath('/dashboard')
+}

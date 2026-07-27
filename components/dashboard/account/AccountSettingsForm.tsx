@@ -8,6 +8,7 @@ import {
   updateBusinessBrandingAction,
 } from '@/lib/actions/business-actions';
 import type { Business } from '@/lib/types';
+import LogoUploader from './LogoUploader';
 
 const BRAND_PALETTES = [
   { id: 'classic', name: 'Clásico', primary: '#171717', secondary: '#FFFFFF' },
@@ -131,31 +132,7 @@ function BusinessInfoCard({ business }: { business: Business }) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        {/* Logo — placeholder hasta que definan la estrategia de imágenes */}
-        <div>
-          <span className="mb-2 block text-xs uppercase tracking-wide text-black/40">
-            Logo
-          </span>
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-dashed border-black/15 bg-black/[0.02] text-black/25">
-              <FiImage size={22} />
-            </div>
-            <div>
-              <button
-                type="button"
-                disabled
-                title="Disponible próximamente"
-                className="cursor-not-allowed rounded-xl border border-black/10 px-4 py-2 text-sm text-black/40"
-              >
-                Subir logo
-              </button>
-              <p className="mt-1 text-xs text-black/35">
-                Disponible próximamente.
-              </p>
-            </div>
-          </div>
-        </div>
-
+        <LogoUploader currentLogoUrl={business.logo_url} />
         <label className="block" htmlFor="businessName">
           <span className="mb-2 block text-xs uppercase tracking-wide text-black/40">
             Nombre del negocio

@@ -90,7 +90,7 @@ export async function createProductAction(formData: FormData) {
     throw new Error('El precio debe ser un número válido mayor o igual a 0')
   }
 
-  await createProduct({
+  const product = await createProduct({
     business_id: businessId,
     category_id: categoryId,
     name,
@@ -100,6 +100,7 @@ export async function createProductAction(formData: FormData) {
   })
 
   revalidatePath('/dashboard/menu')
+  return product
 }
 
 export async function updateProductAction(
@@ -195,5 +196,14 @@ export async function createProductOptionValueAction(formData: FormData) {
 export async function deleteProductOptionValueAction(valueId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   await deleteProductOptionValue(valueId)
+  revalidatePath('/dashboard/menu')
+}
+export async function updateProductImageAction(
+  productId: string,
+  businessId: string,
+  imageUrl: string
+) {
+  await requireBusinessAccess(businessId)
+  await updateProduct(productId, { image_url: imageUrl })
   revalidatePath('/dashboard/menu')
 }
