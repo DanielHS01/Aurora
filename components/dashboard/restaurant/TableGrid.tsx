@@ -61,13 +61,16 @@ export default function TableGrid({
   tables,
   areas,
 }: TableGridProps) {
-  const [selectedTable, setSelectedTable] = useState<TableWithOrder | null>(
-    null
-  );
-  const [editingTable, setEditingTable] = useState<TableWithOrder | null>(
-    null
-  );
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Se derivan de "tables" (siempre trae datos frescos tras cada
+  // router.refresh()) en vez de guardar una copia congelada del objeto
+  // — así el modal ya abierto refleja cambios sin tener que cerrarlo
+  // ni hacer un segundo clic para que se note.
+  const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null;
+  const editingTable = tables.find((t) => t.id === editingTableId) ?? null;
 
   return (
     <section>
@@ -96,43 +99,48 @@ export default function TableGrid({
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {tables.map((table) => (
-            <button
-              key={table.id}
-              onClick={() => setSelectedTable(table)}
-              className={`text-left p-6 rounded-2xl border transition-all duration-200 ${
-                table.status === 'occupied'
-                  ? 'bg-black text-white border-transparent shadow-lg'
-                  : 'bg-white border-black/10 text-black hover:border-black/30'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-lg">
-                  Mesa {table.table_number}
-                </h4>
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(
-                    table.status
-                  )}`}
-                  aria-hidden
-                />
-              </div>
-              <p className="text-xs opacity-60 uppercase mt-1 tracking-wider">
-                {getStatusLabel(table.status)}
-              </p>
-              <p className="text-xs opacity-50 mt-2">
-                {table.capacity} personas
-                {table.area && ` · ${table.area.name}`}
-              </p>
-              {table.activeOrder && (
-                <p className="text-xs opacity-50 mt-1">
-                  {(table.activeOrder.order_items ?? []).length} ítem(s) · $
-                  {(table.activeOrder.total ?? 0).toLocaleString('es-CO')}
-                  {table.activeOrder.status === 'ready' && ' · 🍽️ Listo'}
+          {tables.map((table) => {
+            const isReady = table.activeOrder?.status === 'ready';
+
+            return (
+              <button
+                key={table.id}
+                onClick={() => setSelectedTableId(table.id)}
+                className={`text-left p-6 rounded-2xl border transition-all duration-200 ${
+                  isReady
+                    ? 'bg-amber-400 text-black border-transparent shadow-lg animate-pulse'
+                    : table.status === 'occupied'
+                    ? 'bg-black text-white border-transparent shadow-lg'
+                    : 'bg-white border-black/10 text-black hover:border-black/30'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-lg">
+                    Mesa {table.table_number}
+                  </h4>
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(
+                      table.status
+                    )}`}
+                    aria-hidden
+                  />
+                </div>
+                <p className="text-xs opacity-60 uppercase mt-1 tracking-wider">
+                  {isReady ? '🍽️ Listo para recoger' : getStatusLabel(table.status)}
                 </p>
-              )}
-            </button>
-          ))}
+                <p className="text-xs opacity-50 mt-2">
+                  {table.capacity} personas
+                  {table.area && ` · ${table.area.name}`}
+                </p>
+                {table.activeOrder && (
+                  <p className="text-xs opacity-50 mt-1">
+                    {(table.activeOrder.order_items ?? []).length} ítem(s) · $
+                    {(table.activeOrder.total ?? 0).toLocaleString('es-CO')}
+                  </p>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -140,10 +148,10 @@ export default function TableGrid({
         <TableDetailModal
           businessId={businessId}
           table={selectedTable}
-          onClose={() => setSelectedTable(null)}
+          onClose={() => setSelectedTableId(null)}
           onEdit={() => {
-            setEditingTable(selectedTable);
-            setSelectedTable(null);
+            setEditingTableId(selectedTable.id);
+            setSelectedTableId(null);
           }}
         />
       )}
@@ -161,7 +169,7 @@ export default function TableGrid({
           businessId={businessId}
           table={editingTable}
           areas={areas}
-          onClose={() => setEditingTable(null)}
+          onClose={() => setEditingTableId(null)}
         />
       )}
     </section>

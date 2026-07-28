@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { FiMenu, FiX, FiArrowUpRight, FiGlobe } from "react-icons/fi";
+import { FiMenu, FiX, FiArrowUpRight } from "react-icons/fi";
 
 const navLinks = [
   { label: "Producto", href: "#producto" },
@@ -37,14 +37,6 @@ export default function Navbar() {
         </div>
 
         <div className="hidden items-center justify-end gap-5 lg:flex">
-          <button
-            type="button"
-            aria-label="Cambiar idioma"
-            className="text-white transition hover:text-violet-700"
-          >
-            <FiGlobe size={16} />
-          </button>
-
           <Link
             href="/login"
             className="text-sm font-medium text-white transition hover:text-violet-700"
@@ -53,10 +45,10 @@ export default function Navbar() {
           </Link>
 
           <Link
-            href="#demo"
+            href="/register"
             className="group flex items-center gap-2 rounded-full bg-black px-6 py-3 text-sm font-black uppercase text-white transition hover:bg-violet-700"
           >
-            Solicitar demo
+            Registrarse
             <FiArrowUpRight className="transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
         </div>
@@ -64,7 +56,7 @@ export default function Navbar() {
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="ml-auto flex h-11 w-11 items-center justify-center rounded-full bg-black text-white lg:hidden"
+          className="col-start-3 flex h-11 w-11 items-center justify-center justify-self-end rounded-full bg-black text-white lg:hidden"
           aria-label="Abrir menú"
         >
           {isOpen ? <FiX size={21} /> : <FiMenu size={21} />}
@@ -93,10 +85,10 @@ export default function Navbar() {
             </Link>
 
             <Link
-              href="#demo"
+              href="/register"
               className="rounded-full bg-black px-5 py-3 text-center text-sm font-black uppercase text-white"
             >
-              Solicitar demo
+              Registrarse
             </Link>
           </div>
         </div>
