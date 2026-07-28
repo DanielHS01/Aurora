@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
 import { getCurrentUserBusiness } from '@/lib/queries/businesses';
 import { getCurrentUserRole } from '@/lib/queries/business-users';
+import ToastProvider from '@/components/dashboard/ToastProvider';
 
 export default async function DashboardLayout({
   children,
@@ -17,6 +18,7 @@ export default async function DashboardLayout({
   const role = await getCurrentUserRole(business.id);
 
   return (
+    <ToastProvider>
     <div
       className="flex h-screen flex-col bg-[#FDFDFD] md:flex-row"
       style={
@@ -37,5 +39,6 @@ export default async function DashboardLayout({
         {children}
       </main>
     </div>
+    </ToastProvider>
   );
 }

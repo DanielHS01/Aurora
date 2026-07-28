@@ -31,7 +31,8 @@ export default async function TablesPage() {
 
   return (
     <div>
-      <RealtimeOrdersListener businessId={business.id} />
+      <RealtimeOrdersListener businessId={business.id} 
+      tables={tables.map((t) => ({ id: t.id, table_number: t.table_number }))}/>
       <header className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">Mesas</h1>
         <p className="mt-1 text-sm text-black/40">
