@@ -22,6 +22,7 @@ const MENU_BY_TYPE: Record<string, { name: string; path: string }[]> = {
     { name: 'Cocina / Pedidos', path: '/dashboard/kitchen' },
     { name: 'Menú', path: '/dashboard/menu' },
     { name: 'Reservas', path: '/dashboard/reservations' },
+    { name: 'Facturas', path: '/dashboard/invoices' },
     { name: 'Reportes', path: '/dashboard/reports' },
   ],
   'barber shop': [
