@@ -6,6 +6,7 @@ import {
   updatePaymentStatus,
   createInvoiceFromOrder,
   updateInvoiceStatus,
+  getInvoiceById,
 } from '@/lib/queries/payments'
 import type { PaymentMethod, PaymentStatus } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
@@ -106,4 +107,8 @@ export async function checkoutOrderAction(
   revalidatePath('/dashboard/reports')
 
   return { invoice }
+}
+export async function getInvoiceDetailAction(invoiceId: string, businessId: string) {
+  await requireBusinessAccess(businessId)
+  return getInvoiceById(invoiceId)
 }

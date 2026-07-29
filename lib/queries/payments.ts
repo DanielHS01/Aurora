@@ -5,6 +5,8 @@ import type {
   PaymentStatus,
   Invoice,
   InvoiceItem,
+  Customer,
+  OrderType,
 } from '@/lib/types'
 import type { TablesUpdate } from '@/lib/types/database.types'
 
@@ -182,4 +184,143 @@ export async function updateInvoiceStatus(
     throw new Error(`Error actualizando factura: ${error?.message}`)
   }
   return data
+}
+export type InvoiceWithDetails = Invoice & {
+  customer: Customer | null
+  order: {
+    order_type: OrderType
+    notes: string | null
+    table: { table_number: string } | null
+  } | null
+}
+
+/**
+ * Trae las facturas de un negocio con el contexto necesario para
+ * mostrarlas en una tabla legible: cliente, tipo de operación y notas
+ * del pedido asociado — pensado para /dashboard/invoices.
+ */
+export async function getInvoicesWithDetails(
+  businessId: string
+): Promise<InvoiceWithDetails[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('invoices')
+    .select(
+      '*, customer:customers(*), order:orders(order_type, notes, table:restaurant_tables(table_number))'
+    )
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return []
+  return data as InvoiceWithDetails[]
+}
+export type InvoiceSortOption =
+  | 'recent'
+  | 'oldest'
+  | 'customer_asc'
+  | 'customer_desc'
+  | 'total_desc'
+  | 'total_asc'
+
+export type InvoiceFilters = {
+  page: number
+  pageSize: number
+  search?: string
+  orderType?: OrderType
+  sort?: InvoiceSortOption
+}
+
+export async function getInvoicesPaginated(
+  businessId: string,
+  filters: InvoiceFilters
+): Promise<{ invoices: InvoiceWithDetails[]; totalCount: number }> {
+  const supabase = await createClient()
+  const { page, pageSize, search, orderType, sort = 'recent' } = filters
+
+  // Búsqueda por nombre de cliente: como el nombre vive en otra tabla,
+  // primero resolvemos qué customer_id coinciden, y filtramos por eso.
+  let matchingCustomerIds: string[] = []
+  if (search) {
+    const { data } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('business_id', businessId)
+      .ilike('full_name', `%${search}%`)
+    matchingCustomerIds = (data ?? []).map((c) => c.id)
+  }
+
+  // Filtro por tipo de operación: mismo caso, order_type vive en "orders".
+  let matchingOrderIds: string[] | null = null
+  if (orderType) {
+    const { data } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('order_type', orderType)
+    matchingOrderIds = (data ?? []).map((o) => o.id)
+  }
+
+  let query = supabase
+    .from('invoices')
+    .select(
+      '*, customer:customers(*), order:orders(order_type, notes, table:restaurant_tables(table_number))',
+      { count: 'exact' }
+    )
+    .eq('business_id', businessId)
+
+  if (matchingOrderIds) {
+    query = query.in(
+      'order_id',
+      matchingOrderIds.length > 0
+        ? matchingOrderIds
+        : ['00000000-0000-0000-0000-000000000000'] // fuerza 0 resultados si no hay match
+    )
+  }
+
+  if (search) {
+    const conditions = [`invoice_number.ilike.%${search}%`]
+    if (matchingCustomerIds.length > 0) {
+      conditions.push(`customer_id.in.(${matchingCustomerIds.join(',')})`)
+    }
+    query = query.or(conditions.join(','))
+  }
+
+  switch (sort) {
+    case 'oldest':
+      query = query.order('created_at', { ascending: true })
+      break
+    case 'total_desc':
+      query = query.order('total', { ascending: false })
+      break
+    case 'total_asc':
+      query = query.order('total', { ascending: true })
+      break
+    // 'customer_asc'/'customer_desc' y 'recent' comparten el mismo
+    // order() base — el reordenamiento por cliente pasa DESPUÉS,
+    // en memoria, solo dentro de la página ya traída (ver nota abajo).
+    default:
+      query = query.order('created_at', { ascending: false })
+  }
+
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+  query = query.range(from, to)
+
+  const { data, error, count } = await query
+  if (error || !data) return { invoices: [], totalCount: 0 }
+
+  let invoices = data as InvoiceWithDetails[]
+
+  if (sort === 'customer_asc' || sort === 'customer_desc') {
+    invoices = [...invoices].sort((a, b) => {
+      const nameA = (a.customer?.full_name ?? '').toLowerCase()
+      const nameB = (b.customer?.full_name ?? '').toLowerCase()
+      return sort === 'customer_asc'
+        ? nameA.localeCompare(nameB)
+        : nameB.localeCompare(nameA)
+    })
+  }
+
+  return { invoices, totalCount: count ?? 0 }
 }
