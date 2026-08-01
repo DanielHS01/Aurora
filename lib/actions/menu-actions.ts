@@ -207,3 +207,26 @@ export async function updateProductImageAction(
   await updateProduct(productId, { image_url: imageUrl })
   revalidatePath('/dashboard/menu')
 }
+import { getCurrentUserRole } from '@/lib/queries/business-users'
+import { toggleProductSoldOut } from '@/lib/queries/menu'
+import type { BusinessRole } from '@/lib/types'
+
+const ROLES_THAT_CAN_TOGGLE_STOCK: BusinessRole[] = ['owner', 'admin', 'manager', 'kitchen']
+
+export async function toggleProductSoldOutAction(
+  productId: string,
+  businessId: string,
+  isSoldOut: boolean
+) {
+  await requireBusinessAccess(businessId)
+
+  const role = await getCurrentUserRole(businessId)
+  if (!role || !ROLES_THAT_CAN_TOGGLE_STOCK.includes(role)) {
+    throw new Error('No tienes permiso para marcar disponibilidad de platos')
+  }
+
+  await toggleProductSoldOut(productId, isSoldOut)
+  revalidatePath('/dashboard/kitchen')
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/dashboard/menu')
+}

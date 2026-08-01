@@ -356,3 +356,18 @@ export async function getFullMenu(businessId: string): Promise<CategoryWithProdu
   if (error || !data) return []
   return data as CategoryWithProducts[]
 }
+export async function toggleProductSoldOut(
+  productId: string,
+  isSoldOut: boolean
+): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('products')
+    .update({ is_sold_out: isSoldOut })
+    .eq('id', productId)
+
+  if (error) {
+    throw new Error(`Error actualizando disponibilidad: ${error.message}`)
+  }
+}

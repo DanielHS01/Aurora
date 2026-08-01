@@ -151,3 +151,214 @@ export async function getUpcomingReservationsCount(businessId: string): Promise<
   if (error) return 0
   return count ?? 0
 }
+// ============================================================================
+// COMPARACIÓN DE PERIODOS
+// ============================================================================
+
+export type PeriodComparison = {
+  current: { revenue: number; orderCount: number }
+  previous: { revenue: number; orderCount: number }
+  revenueChangePercent: number | null
+  orderChangePercent: number | null
+}
+
+function getPeriodRange(period: 'day' | 'week' | 'month') {
+  const now = new Date()
+  let currentStart: Date
+  let previousStart: Date
+  let previousEnd: Date
+
+  if (period === 'day') {
+    currentStart = new Date(now)
+    currentStart.setHours(0, 0, 0, 0)
+    previousStart = new Date(currentStart)
+    previousStart.setDate(previousStart.getDate() - 1)
+    previousEnd = new Date(currentStart)
+  } else if (period === 'week') {
+    const dayOfWeek = now.getDay()
+    currentStart = new Date(now)
+    currentStart.setDate(now.getDate() - dayOfWeek)
+    currentStart.setHours(0, 0, 0, 0)
+    previousStart = new Date(currentStart)
+    previousStart.setDate(previousStart.getDate() - 7)
+    previousEnd = new Date(currentStart)
+  } else {
+    currentStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    previousEnd = new Date(currentStart)
+  }
+
+  return { currentStart, previousStart, previousEnd }
+}
+
+async function getRevenueAndOrders(
+  businessId: string,
+  from: Date,
+  to: Date
+): Promise<{ revenue: number; orderCount: number }> {
+  const supabase = await createClient()
+
+  const [{ data: payments }, { count }] = await Promise.all([
+    supabase
+      .from('payments')
+      .select('amount')
+      .eq('business_id', businessId)
+      .eq('status', 'paid')
+      .gte('created_at', from.toISOString())
+      .lt('created_at', to.toISOString()),
+    supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('created_at', from.toISOString())
+      .lt('created_at', to.toISOString()),
+  ])
+
+  const revenue = (payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0)
+  return { revenue, orderCount: count ?? 0 }
+}
+
+function percentChange(current: number, previous: number): number | null {
+  if (previous === 0) return current > 0 ? 100 : null
+  return ((current - previous) / previous) * 100
+}
+
+export async function getPeriodComparison(
+  businessId: string,
+  period: 'day' | 'week' | 'month'
+): Promise<PeriodComparison> {
+  const { currentStart, previousStart, previousEnd } = getPeriodRange(period)
+  const now = new Date()
+
+  const [current, previous] = await Promise.all([
+    getRevenueAndOrders(businessId, currentStart, now),
+    getRevenueAndOrders(businessId, previousStart, previousEnd),
+  ])
+
+  return {
+    current,
+    previous,
+    revenueChangePercent: percentChange(current.revenue, previous.revenue),
+    orderChangePercent: percentChange(current.orderCount, previous.orderCount),
+  }
+}
+
+// ============================================================================
+// PLATOS MÁS PEDIDOS
+// ============================================================================
+
+export type TopProduct = {
+  productName: string
+  quantitySold: number
+  revenue: number
+}
+
+export async function getTopProducts(
+  businessId: string,
+  days: number = 30,
+  limit: number = 10
+): Promise<TopProduct[]> {
+  const supabase = await createClient()
+
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('product_name, quantity, total_price, orders!inner(business_id, created_at, status)')
+    .eq('orders.business_id', businessId)
+    .neq('orders.status', 'cancelled')
+    .gte('orders.created_at', startDate.toISOString())
+
+  if (error || !data) return []
+
+  const grouped = new Map<string, { quantitySold: number; revenue: number }>()
+  for (const item of data) {
+    const existing = grouped.get(item.product_name) ?? { quantitySold: 0, revenue: 0 }
+    existing.quantitySold += item.quantity
+    existing.revenue += Number(item.total_price ?? 0)
+    grouped.set(item.product_name, existing)
+  }
+
+  return Array.from(grouped.entries())
+    .map(([productName, stats]) => ({ productName, ...stats }))
+    .sort((a, b) => b.quantitySold - a.quantitySold)
+    .slice(0, limit)
+}
+
+// ============================================================================
+// VENTAS POR HORA DEL DÍA
+// ============================================================================
+
+export type HourlyRevenue = { hour: number; revenue: number }
+
+export async function getRevenueByHour(
+  businessId: string,
+  days: number = 30
+): Promise<HourlyRevenue[]> {
+  const supabase = await createClient()
+
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+
+  const { data, error } = await supabase
+    .from('payments')
+    .select('amount, created_at')
+    .eq('business_id', businessId)
+    .eq('status', 'paid')
+    .gte('created_at', startDate.toISOString())
+
+  if (error || !data) return []
+
+  const buckets = new Map<number, number>()
+  for (let h = 0; h < 24; h++) buckets.set(h, 0)
+
+  for (const payment of data) {
+    const hour = new Date(payment.created_at ?? '').getHours()
+    buckets.set(hour, (buckets.get(hour) ?? 0) + Number(payment.amount))
+  }
+
+  return Array.from(buckets.entries()).map(([hour, revenue]) => ({ hour, revenue }))
+}
+
+// ============================================================================
+// VENTAS POR DÍA DE LA SEMANA
+// ============================================================================
+
+export type DayOfWeekRevenue = { dayIndex: number; dayName: string; revenue: number }
+
+const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+export async function getRevenueByDayOfWeek(
+  businessId: string,
+  days: number = 30
+): Promise<DayOfWeekRevenue[]> {
+  const supabase = await createClient()
+
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+
+  const { data, error } = await supabase
+    .from('payments')
+    .select('amount, created_at')
+    .eq('business_id', businessId)
+    .eq('status', 'paid')
+    .gte('created_at', startDate.toISOString())
+
+  if (error || !data) return []
+
+  const buckets = new Map<number, number>()
+  for (let d = 0; d < 7; d++) buckets.set(d, 0)
+
+  for (const payment of data) {
+    const dayIndex = new Date(payment.created_at ?? '').getDay()
+    buckets.set(dayIndex, (buckets.get(dayIndex) ?? 0) + Number(payment.amount))
+  }
+
+  return Array.from(buckets.entries()).map(([dayIndex, revenue]) => ({
+    dayIndex,
+    dayName: DAY_NAMES[dayIndex],
+    revenue,
+  }))
+}
