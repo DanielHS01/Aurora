@@ -1,28 +1,21 @@
-"use client";
+'use client'
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  FiSearch,
-  FiX,
-  FiMinus,
-  FiPlus,
-  FiSend,
-  FiTrash2,
-} from "react-icons/fi";
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { FiSearch, FiX, FiMinus, FiPlus, FiSend, FiTrash2 } from 'react-icons/fi';
 
 import {
   addOrderItemAction,
   removeOrderItemAction,
   updateOrderItemQuantityAction,
   cancelOrderAction,
-} from "@/lib/actions/order-actions";
-import { createKitchenTicketAction } from "@/lib/actions/kitchen-actions";
-import { updateOrderStatusAction } from "@/lib/actions/order-actions";
-import type { OrderWithItems } from "@/lib/queries/orders";
-import type { CategoryWithProducts } from "@/lib/queries/menu";
+  updateOrderStatusAction,
+} from '@/lib/actions/order-actions';
+import { createKitchenTicketAction } from '@/lib/actions/kitchen-actions';
+import type { OrderWithItems } from '@/lib/queries/orders';
+import type { CategoryWithProducts } from '@/lib/queries/menu';
 
-type ProductWithOptions = CategoryWithProducts["products"][number];
+type ProductWithOptions = CategoryWithProducts['products'][number];
 
 interface OrderBuilderProps {
   businessId: string;
@@ -36,11 +29,12 @@ export default function OrderBuilder({
   menu,
 }: OrderBuilderProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [pickingProduct, setPickingProduct] =
-    useState<ProductWithOptions | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pickingProduct, setPickingProduct] = useState<ProductWithOptions | null>(
+    null
+  );
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   const filteredCategories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -49,13 +43,15 @@ export default function OrderBuilder({
       .map((c) => ({
         ...c,
         products: c.products.filter((p) =>
-          p.name.toLowerCase().includes(query),
+          p.name.toLowerCase().includes(query)
         ),
       }))
       .filter((c) => c.products.length > 0);
   }, [menu, searchQuery]);
 
   function handleProductTap(product: ProductWithOptions) {
+    if (product.is_sold_out) return;
+
     if (product.options.length > 0) {
       setPickingProduct(product);
     } else {
@@ -65,27 +61,23 @@ export default function OrderBuilder({
 
   async function handleAddItem(
     product: ProductWithOptions,
-    options: {
-      option_name: string;
-      option_value: string;
-      extra_price?: number;
-    }[],
+    options: { option_name: string; option_value: string; extra_price?: number }[]
   ) {
-    setError("");
+    setError('');
     try {
       const formData = new FormData();
-      formData.set("orderId", order.id);
-      formData.set("productId", product.id);
-      formData.set("productName", product.name);
-      formData.set("quantity", "1");
-      formData.set("unitPrice", String(product.price));
-      formData.set("options", JSON.stringify(options));
+      formData.set('orderId', order.id);
+      formData.set('productId', product.id);
+      formData.set('productName', product.name);
+      formData.set('quantity', '1');
+      formData.set('unitPrice', String(product.price));
+      formData.set('options', JSON.stringify(options));
 
       await addOrderItemAction(businessId, formData);
       router.refresh();
       setPickingProduct(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error.");
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
     }
   }
 
@@ -94,7 +86,7 @@ export default function OrderBuilder({
       await removeOrderItemAction(orderItemId, order.id, businessId);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error.");
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
     }
   }
 
@@ -105,44 +97,39 @@ export default function OrderBuilder({
         orderItemId,
         order.id,
         businessId,
-        newQty,
+        newQty
       );
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error.");
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
     }
   }
 
   async function handleSendToKitchen() {
     if (order.items.length === 0) {
-      setError("Agrega al menos un ítem antes de enviar a cocina.");
+      setError('Agrega al menos un ítem antes de enviar a cocina.');
       return;
     }
     setSending(true);
-    setError("");
+    setError('');
     try {
       await createKitchenTicketAction(businessId, order.id);
-      await updateOrderStatusAction(
-        order.id,
-        businessId,
-        "confirmed",
-        order.table_id,
-      );
-      router.push("/dashboard/tables");
+      await updateOrderStatusAction(order.id, businessId, 'confirmed', order.table_id);
+      router.push('/dashboard/tables');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error.");
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
     } finally {
       setSending(false);
     }
   }
 
   async function handleCancelOrder() {
-    if (!confirm("¿Cancelar este pedido? La mesa quedará libre.")) return;
+    if (!confirm('¿Cancelar este pedido? La mesa quedará libre.')) return;
     try {
       await cancelOrderAction(order.id, businessId, order.table_id);
-      router.push("/dashboard/tables");
+      router.push('/dashboard/tables');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error.");
+      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
     }
   }
 
@@ -171,12 +158,23 @@ export default function OrderBuilder({
                   <button
                     key={product.id}
                     onClick={() => handleProductTap(product)}
-                    className="rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:border-black/30"
+                    disabled={product.is_sold_out}
+                    className={`rounded-2xl border p-4 text-left transition ${
+                      product.is_sold_out
+                        ? 'cursor-not-allowed border-black/5 bg-black/[0.02] opacity-50'
+                        : 'border-black/10 bg-white hover:border-black/30'
+                    }`}
                   >
                     <p className="font-medium">{product.name}</p>
-                    <p className="mt-1 text-sm text-black/50">
-                      ${product.price.toLocaleString("es-CO")}
-                    </p>
+                    {product.is_sold_out ? (
+                      <p className="mt-1 text-sm font-medium text-red-500">
+                        Agotado
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-black/50">
+                        ${product.price.toLocaleString('es-CO')}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -188,7 +186,7 @@ export default function OrderBuilder({
       {/* Carrito del pedido */}
       <div className="flex flex-col rounded-2xl border border-black/10 bg-white p-5">
         <h3 className="mb-4 text-lg font-medium">
-          {order.table_id ? "Pedido" : "Pedido para llevar"}
+          {order.table_id ? 'Pedido' : 'Pedido para llevar'}
         </h3>
 
         {error && (
@@ -218,7 +216,7 @@ export default function OrderBuilder({
                       <p className="mt-0.5 text-xs text-black/40">
                         {item.options
                           .map((o) => `${o.option_name}: ${o.option_value}`)
-                          .join(" · ")}
+                          .join(' · ')}
                       </p>
                     )}
                   </div>
@@ -255,7 +253,7 @@ export default function OrderBuilder({
                     </button>
                   </div>
                   <span className="text-sm font-medium">
-                    ${item.total_price.toLocaleString("es-CO")}
+                    ${item.total_price.toLocaleString('es-CO')}
                   </span>
                 </div>
               </div>
@@ -266,7 +264,7 @@ export default function OrderBuilder({
         <div className="mt-4 space-y-3 border-t border-black/10 pt-4">
           <div className="flex justify-between font-medium">
             <span>Total</span>
-            <span>${(order.total ?? 0).toLocaleString("es-CO")}</span>
+            <span>${(order.total ?? 0).toLocaleString('es-CO')}</span>
           </div>
 
           <button
@@ -275,7 +273,7 @@ export default function OrderBuilder({
             className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90 disabled:opacity-60"
           >
             <FiSend size={15} />
-            {sending ? "Enviando..." : "Enviar a cocina"}
+            {sending ? 'Enviando...' : 'Enviar a cocina'}
           </button>
 
           <button
@@ -306,11 +304,7 @@ function OrderItemOptionsModal({
   product: ProductWithOptions;
   onClose: () => void;
   onConfirm: (
-    options: {
-      option_name: string;
-      option_value: string;
-      extra_price?: number;
-    }[],
+    options: { option_name: string; option_value: string; extra_price?: number }[]
   ) => void;
 }) {
   const [selections, setSelections] = useState<Record<string, string[]>>({});
@@ -319,7 +313,7 @@ function OrderItemOptionsModal({
     optionId: string,
     optionName: string,
     valueName: string,
-    maxSelect: number,
+    maxSelect: number
   ) {
     setSelections((prev) => {
       const current = prev[optionId] ?? [];
@@ -334,7 +328,7 @@ function OrderItemOptionsModal({
       }
 
       if (current.length >= maxSelect) {
-        return prev; // ya alcanzó el máximo permitido
+        return prev;
       }
 
       return { ...prev, [optionId]: [...current, valueName] };
@@ -343,18 +337,14 @@ function OrderItemOptionsModal({
 
   function handleConfirm() {
     const missingRequired = product.options.find(
-      (opt) => opt.is_required && (selections[opt.id] ?? []).length === 0,
+      (opt) => opt.is_required && (selections[opt.id] ?? []).length === 0
     );
     if (missingRequired) {
       alert(`"${missingRequired.name}" es obligatorio.`);
       return;
     }
 
-    const options: {
-      option_name: string;
-      option_value: string;
-      extra_price?: number;
-    }[] = [];
+    const options: { option_name: string; option_value: string; extra_price?: number }[] = [];
     for (const opt of product.options) {
       const chosen = selections[opt.id] ?? [];
       for (const valueName of chosen) {
@@ -398,7 +388,7 @@ function OrderItemOptionsModal({
               <div className="space-y-1.5">
                 {option.values.map((value) => {
                   const isSelected = (selections[option.id] ?? []).includes(
-                    value.name,
+                    value.name
                   );
                   return (
                     <button
@@ -408,19 +398,19 @@ function OrderItemOptionsModal({
                           option.id,
                           option.name,
                           value.name,
-                          option.max_select ?? 1,
+                          option.max_select ?? 1
                         )
                       }
                       className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm transition ${
                         isSelected
-                          ? "border-black bg-black text-white"
-                          : "border-black/10 hover:border-black/30"
+                          ? 'border-black bg-black text-white'
+                          : 'border-black/10 hover:border-black/30'
                       }`}
                     >
                       <span>{value.name}</span>
                       {(value.extra_price ?? 0) > 0 && (
                         <span className="text-xs opacity-70">
-                          +${(value.extra_price ?? 0).toLocaleString("es-CO")}
+                          +${(value.extra_price ?? 0).toLocaleString('es-CO')}
                         </span>
                       )}
                     </button>
