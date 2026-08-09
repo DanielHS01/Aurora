@@ -1,7 +1,7 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   FiSearch,
   FiEye,
@@ -10,50 +10,53 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiX,
-} from 'react-icons/fi';
+  FiPrinter,
+} from "react-icons/fi";
 
-import { getInvoiceDetailAction } from '@/lib/actions/payment-actions';
+import { getInvoiceDetailAction } from "@/lib/actions/payment-actions";
 import type {
   InvoiceWithDetails,
   InvoiceWithItems,
   InvoiceSortOption,
-} from '@/lib/queries/payments';
-import type { OrderType } from '@/lib/types';
+} from "@/lib/queries/payments";
+import type { OrderType } from "@/lib/types";
+import InvoicePreviewModal from "./InvoicePreviewModal";
+import { formatDateTimeCO } from '@/lib/utils/formatDate';
 
-const DEFAULT_SORT: InvoiceSortOption = 'recent';
+const DEFAULT_SORT: InvoiceSortOption = "recent";
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
-  dine_in: 'En mesa',
-  takeaway: 'Para llevar',
-  delivery: 'Domicilio',
-  reservation: 'Reserva',
+  dine_in: "En mesa",
+  takeaway: "Para llevar",
+  delivery: "Domicilio",
+  reservation: "Reserva",
 };
 
 const SORT_OPTIONS: { value: InvoiceSortOption; label: string }[] = [
-  { value: 'recent', label: 'Más reciente' },
-  { value: 'oldest', label: 'Más antigua' },
-  { value: 'customer_asc', label: 'Cliente (A-Z)' },
-  { value: 'customer_desc', label: 'Cliente (Z-A)' },
-  { value: 'total_desc', label: 'Total (mayor a menor)' },
-  { value: 'total_asc', label: 'Total (menor a mayor)' },
+  { value: "recent", label: "Más reciente" },
+  { value: "oldest", label: "Más antigua" },
+  { value: "customer_asc", label: "Cliente (A-Z)" },
+  { value: "customer_desc", label: "Cliente (Z-A)" },
+  { value: "total_desc", label: "Total (mayor a menor)" },
+  { value: "total_asc", label: "Total (menor a mayor)" },
 ];
 
 function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return "—";
   const d = new Date(dateStr);
-  return d.toLocaleString('es-CO', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  return d.toLocaleString("es-CO", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
 function StatusBadge({ status }: { status: string | null }) {
-  const normalized = (status ?? '').toLowerCase();
+  const normalized = (status ?? "").toLowerCase();
 
-  if (normalized === 'issued' || normalized === 'paid') {
+  if (normalized === "issued" || normalized === "paid") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
         <FiCheckCircle size={13} />
@@ -62,7 +65,7 @@ function StatusBadge({ status }: { status: string | null }) {
     );
   }
 
-  if (normalized === 'cancelled' || normalized === 'void') {
+  if (normalized === "cancelled" || normalized === "void") {
     return (
       <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">
         Anulada
@@ -72,7 +75,7 @@ function StatusBadge({ status }: { status: string | null }) {
 
   return (
     <span className="inline-flex items-center rounded-full bg-black/[0.05] px-2.5 py-1 text-xs font-medium text-black/50">
-      {status || 'Borrador'}
+      {status || "Borrador"}
     </span>
   );
 }
@@ -103,7 +106,13 @@ export default function InvoicesTable({
   const searchParams = useSearchParams();
 
   const [searchInput, setSearchInput] = useState(currentSearch);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
+    null,
+  );
+  const [previewInvoice, setPreviewInvoice] = useState<{
+    id: string;
+    number: string;
+  } | null>(null);
 
   const totalPages = Math.max(Math.ceil(totalCount / pageSize), 1);
 
@@ -122,14 +131,14 @@ export default function InvoicesTable({
         params.delete(key);
       }
     }
-    if (!('page' in updates)) {
-      params.delete('page');
+    if (!("page" in updates)) {
+      params.delete("page");
     }
     router.push(`${pathname}?${params.toString()}`);
   }
 
   function handleClearFilters() {
-    setSearchInput('');
+    setSearchInput("");
     router.push(pathname);
   }
 
@@ -160,7 +169,7 @@ export default function InvoicesTable({
 
         <div className="flex flex-wrap items-center gap-2">
           <select
-            value={currentOrderType ?? ''}
+            value={currentOrderType ?? ""}
             onChange={(e) =>
               updateParams({ type: e.target.value || undefined })
             }
@@ -202,8 +211,8 @@ export default function InvoicesTable({
         <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/10 bg-gray-50/50 p-16">
           <p className="text-black/50">
             {totalCount === 0
-              ? 'Aún no se ha generado ninguna factura.'
-              : 'No hay resultados para los filtros aplicados.'}
+              ? "Aún no se ha generado ninguna factura."
+              : "No hay resultados para los filtros aplicados."}
           </p>
           {hasActiveFilters && totalCount > 0 && (
             <button
@@ -238,14 +247,16 @@ export default function InvoicesTable({
                         #{invoice.invoice_number ?? invoice.id.slice(0, 8)}
                       </p>
                       <p className="text-xs text-black/40">
-                        {formatDateTime(invoice.issued_at ?? invoice.created_at)}
+                        {formatDateTimeCO(
+                          invoice.issued_at ?? invoice.created_at,
+                        )}
                       </p>
                     </td>
                     <td className="px-4 py-3 text-black/60">
                       {invoice.order
-                        ? ORDER_TYPE_LABEL[invoice.order.order_type] ??
-                          invoice.order.order_type
-                        : '—'}
+                        ? (ORDER_TYPE_LABEL[invoice.order.order_type] ??
+                          invoice.order.order_type)
+                        : "—"}
                       {invoice.order?.table?.table_number && (
                         <span className="ml-1 text-xs text-black/40">
                           · Mesa {invoice.order.table.table_number}
@@ -253,13 +264,13 @@ export default function InvoicesTable({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {invoice.customer?.full_name ?? 'Cliente sin registrar'}
+                      {invoice.customer?.full_name ?? "Cliente sin registrar"}
                     </td>
                     <td className="px-4 py-3 font-medium">
-                      ${(invoice.total ?? 0).toLocaleString('es-CO')}
+                      ${(invoice.total ?? 0).toLocaleString("es-CO")}
                     </td>
                     <td className="max-w-[180px] truncate px-4 py-3 text-black/50">
-                      {invoice.order?.notes || '—'}
+                      {invoice.order?.notes || "—"}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={invoice.status} />
@@ -274,12 +285,18 @@ export default function InvoicesTable({
                           <FiEye size={15} />
                         </button>
                         <button
-                          disabled
-                          title="Disponible próximamente"
-                          aria-label="Descargar PDF"
-                          className="cursor-not-allowed rounded-lg p-2 text-black/20"
+                          onClick={() =>
+                            setPreviewInvoice({
+                              id: invoice.id,
+                              number:
+                                invoice.invoice_number ??
+                                invoice.id.slice(0, 8),
+                            })
+                          }
+                          aria-label="Ver e imprimir factura"
+                          className="rounded-lg p-2 text-black/50 hover:bg-black/5 hover:text-black"
                         >
-                          <FiDownload size={15} />
+                          <FiPrinter size={15} />
                         </button>
                       </div>
                     </td>
@@ -326,6 +343,13 @@ export default function InvoicesTable({
           onClose={() => setSelectedInvoiceId(null)}
         />
       )}
+      {previewInvoice && (
+        <InvoicePreviewModal
+          invoiceId={previewInvoice.id}
+          invoiceNumber={previewInvoice.number}
+          onClose={() => setPreviewInvoice(null)}
+        />
+      )}
     </div>
   );
 }
@@ -341,7 +365,7 @@ function InvoiceDetailModal({
 }) {
   const [invoice, setInvoice] = useState<InvoiceWithItems | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -350,14 +374,14 @@ function InvoiceDetailModal({
       .then((data) => {
         if (cancelled) return;
         if (!data) {
-          setError('No se pudo cargar la factura.');
+          setError("No se pudo cargar la factura.");
         } else {
           setInvoice(data);
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+          setError(err instanceof Error ? err.message : "Ocurrió un error.");
         }
       })
       .finally(() => {
@@ -395,7 +419,7 @@ function InvoiceDetailModal({
               <StatusBadge status={invoice.status} />
             </div>
             <p className="mb-5 text-xs text-black/40">
-              {formatDateTime(invoice.issued_at ?? invoice.created_at)}
+              {formatDateTimeCO(invoice.issued_at ?? invoice.created_at)}
             </p>
 
             <ul className="space-y-2">
@@ -405,7 +429,7 @@ function InvoiceDetailModal({
                     {item.quantity}x {item.description}
                   </span>
                   <span className="text-black/60">
-                    ${(item.total_price ?? 0).toLocaleString('es-CO')}
+                    ${(item.total_price ?? 0).toLocaleString("es-CO")}
                   </span>
                 </li>
               ))}
@@ -414,15 +438,17 @@ function InvoiceDetailModal({
             <div className="mt-4 space-y-1.5 border-t border-black/10 pt-4 text-sm">
               <div className="flex justify-between text-black/50">
                 <span>Subtotal</span>
-                <span>${(invoice.subtotal ?? 0).toLocaleString('es-CO')}</span>
+                <span>${(invoice.subtotal ?? 0).toLocaleString("es-CO")}</span>
               </div>
               <div className="flex justify-between text-black/50">
                 <span>Impuestos</span>
-                <span>${(invoice.tax_amount ?? 0).toLocaleString('es-CO')}</span>
+                <span>
+                  ${(invoice.tax_amount ?? 0).toLocaleString("es-CO")}
+                </span>
               </div>
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>
-                <span>${(invoice.total ?? 0).toLocaleString('es-CO')}</span>
+                <span>${(invoice.total ?? 0).toLocaleString("es-CO")}</span>
               </div>
             </div>
 
