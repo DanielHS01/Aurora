@@ -14,6 +14,7 @@ import { updateOrderStatus } from '@/lib/queries/orders'
 import { updateTableStatus } from '@/lib/queries/tables'
 import type { InvoiceWithItems } from '@/lib/queries/payments'
 
+
 export async function recordPaymentAction(businessId: string, formData: FormData) {
   await requireBusinessAccess(businessId)
 
@@ -77,6 +78,8 @@ export async function updateInvoiceStatusAction(
  * automáticamente para evitar descuadres de caja silenciosos — un
  * fallo aquí debe resolverse manualmente, no reintentarse solo.
  */
+
+
 export async function checkoutOrderAction(
   businessId: string,
   orderId: string,
@@ -96,7 +99,8 @@ export async function checkoutOrderAction(
   }
 
   await recordPayment(businessId, orderId, amount, method)
-  const invoice = await createInvoiceFromOrder(orderId)
+  const invoiceDraft = await createInvoiceFromOrder(orderId)
+  const invoice = await updateInvoiceStatus(invoiceDraft.id, 'issued')
   await updateOrderStatus(orderId, 'completed')
 
   if (tableId) {
@@ -105,8 +109,9 @@ export async function checkoutOrderAction(
 
   revalidatePath('/dashboard/tables')
   revalidatePath('/dashboard/reports')
+  revalidatePath('/dashboard/invoices')
 
-  return { invoice }
+  return { invoice: invoiceDraft.items ? { ...invoice, items: invoiceDraft.items } : invoiceDraft }
 }
 export async function getInvoiceDetailAction(invoiceId: string, businessId: string) {
   await requireBusinessAccess(businessId)

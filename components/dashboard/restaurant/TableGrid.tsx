@@ -65,10 +65,6 @@ export default function TableGrid({
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Se derivan de "tables" (siempre trae datos frescos tras cada
-  // router.refresh()) en vez de guardar una copia congelada del objeto
-  // — así el modal ya abierto refleja cambios sin tener que cerrarlo
-  // ni hacer un segundo clic para que se note.
   const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null;
   const editingTable = tables.find((t) => t.id === editingTableId) ?? null;
 
@@ -108,7 +104,7 @@ export default function TableGrid({
                 onClick={() => setSelectedTableId(table.id)}
                 className={`text-left p-6 rounded-2xl border transition-all duration-200 ${
                   isReady
-                    ? 'bg-amber-400 text-black border-transparent shadow-lg animate-pulse'
+                    ? 'bg-emerald-400 text-black border-transparent shadow-lg animate-pulse'
                     : table.status === 'occupied'
                     ? 'bg-black text-white border-transparent shadow-lg'
                     : 'bg-white border-black/10 text-black hover:border-black/30'
@@ -190,7 +186,15 @@ function TableDetailModal({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showCheckout, setShowCheckout] = useState(false);
+
+  // Se captura al momento de abrir el checkout, no se deriva de
+  // table.activeOrder de forma continua — así el modal de cobro no
+  // desaparece solo cuando el pedido cambia de estado (a "completed")
+  // tras el router.refresh() que dispara el propio pago.
+  const [checkoutOrder, setCheckoutOrder] = useState<{
+    orderId: string;
+    total: number;
+  } | null>(null);
 
   const orderItems = table.activeOrder?.order_items ?? [];
 
@@ -323,7 +327,12 @@ function TableDetailModal({
               )}
 
               <button
-                onClick={() => setShowCheckout(true)}
+                onClick={() =>
+                  setCheckoutOrder({
+                    orderId: table.activeOrder!.id,
+                    total: table.activeOrder!.total ?? 0,
+                  })
+                }
                 className="w-full rounded-xl bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-secondary)]"
               >
                 💳 Cobrar
@@ -349,14 +358,14 @@ function TableDetailModal({
         </div>
       </div>
 
-      {showCheckout && table.activeOrder && (
+      {checkoutOrder && (
         <CheckoutModal
           businessId={businessId}
-          orderId={table.activeOrder.id}
+          orderId={checkoutOrder.orderId}
           tableId={table.id}
-          total={table.activeOrder.total ?? 0}
+          total={checkoutOrder.total}
           onClose={() => {
-            setShowCheckout(false);
+            setCheckoutOrder(null);
             onClose();
           }}
         />

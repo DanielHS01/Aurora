@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiX, FiCheckCircle, FiCreditCard } from 'react-icons/fi';
+import { FiX, FiCheckCircle, FiCreditCard, FiPrinter } from 'react-icons/fi';
 
 import { checkoutOrderAction } from '@/lib/actions/payment-actions';
 import type { PaymentMethod } from '@/lib/types';
@@ -34,7 +34,9 @@ export default function CheckoutModal({
   const [cashReceived, setCashReceived] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
+  const printFrameRef = useRef<HTMLIFrameElement>(null);
 
   const cashReceivedNumber = Number(cashReceived) || 0;
   const change = useMemo(
@@ -43,6 +45,15 @@ export default function CheckoutModal({
   );
   const isCashInsufficient =
     method === 'cash' && cashReceived !== '' && cashReceivedNumber < total;
+
+  function triggerPrint(id: string) {
+    // Se carga el PDF en un iframe invisible y se dispara la impresión
+    // automáticamente — el usuario nunca ve un diálogo de "guardar
+    // archivo", solo el diálogo nativo de impresión del navegador.
+    if (printFrameRef.current) {
+      printFrameRef.current.src = `/api/invoices/${id}/pdf`;
+    }
+  }
 
   async function handleConfirm() {
     setError('');
@@ -65,7 +76,10 @@ export default function CheckoutModal({
         formData
       );
 
-      setInvoiceNumber(invoice.invoice_number ?? invoice.id);
+      const number = invoice.invoice_number ?? invoice.id;
+      setInvoiceId(invoice.id);
+      setInvoiceNumber(number);
+      triggerPrint(invoice.id);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ocurrió un error.');
@@ -92,9 +106,18 @@ export default function CheckoutModal({
             <p className="mt-2 text-sm text-black/50">
               Factura #{invoiceNumber} generada. La mesa quedó libre.
             </p>
+
+            <button
+              onClick={() => invoiceId && triggerPrint(invoiceId)}
+              className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-medium text-black/70 hover:bg-black/5"
+            >
+              <FiPrinter size={14} />
+              Imprimir de nuevo
+            </button>
+
             <button
               onClick={onClose}
-              className="mt-6 h-11 w-full rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)]"
+              className="mt-2 h-11 w-full rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)]"
             >
               Listo
             </button>
@@ -202,6 +225,18 @@ export default function CheckoutModal({
             </button>
           </>
         )}
+
+        {/* iframe invisible, solo usado para disparar la impresión */}
+        <iframe
+          ref={printFrameRef}
+          className="hidden"
+          title="Impresión de factura"
+          onLoad={() => {
+            if (printFrameRef.current?.src) {
+              printFrameRef.current.contentWindow?.print();
+            }
+          }}
+        />
       </div>
     </div>
   );
