@@ -21,7 +21,7 @@ import { signUpAction } from "@/lib/actions/auth-actions";
 
 const BUSINESS_TYPES = [
   { value: "restaurant", label: "Restaurante" },
-  { value: "barbershop", label: "Barbería" },
+  { value: 'barbershop', label: "Barbería" },
   { value: "optical", label: "Óptica" },
 ] as const;
 

@@ -3,9 +3,8 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiLogOut, FiSettings, FiMenu, FiX } from 'react-icons/fi';
+import {FiMenu, FiX } from 'react-icons/fi';
 
-import { signOutAction } from '@/lib/actions/auth-actions';
 import { cloudinaryTransform, LOGO_THUMBNAIL } from '@/lib/utils/cloudinary';
 
 interface SidebarProps {
@@ -13,12 +12,14 @@ interface SidebarProps {
   logoUrl: string | null;
   businessType: string | null;
   userRole: string | null;
+  isPlatformAdmin?: boolean;
 }
 
 const MENU_BY_TYPE: Record<string, { name: string; path: string }[]> = {
   restaurant: [
     { name: 'Panel', path: '/dashboard' },
     { name: 'Mesas', path: '/dashboard/tables' },
+    { name: 'Pedidos', path: '/dashboard/orders' },
     { name: 'Cocina / Pedidos', path: '/dashboard/kitchen' },
     { name: 'Menú', path: '/dashboard/menu' },
     { name: 'Reservas', path: '/dashboard/reservations' },
@@ -52,6 +53,7 @@ export default function Sidebar({
   logoUrl,
   businessType,
   userRole,
+  isPlatformAdmin = false
 }: SidebarProps) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -60,9 +62,18 @@ export default function Sidebar({
     (businessType && MENU_BY_TYPE[businessType]) || DEFAULT_MENU;
 
   const canManageTeam = userRole === 'owner' || userRole === 'admin';
-  const menuItems = canManageTeam
-    ? [...baseMenuItems, { name: 'Equipo', path: '/dashboard/team' }]
-    : baseMenuItems;
+
+  const adminOnlyItems = canManageTeam
+    ? [
+        { name: 'Equipo', path: '/dashboard/team' },
+        { name: 'Canales de IA', path: '/dashboard/ai-channels' },
+      ]
+    : [];
+  const platformAdminItems = isPlatformAdmin
+    ? [{ name: '⚙️ Panel de Aurora', path: '/admin' }]
+    : [];
+
+  const menuItems = [...baseMenuItems, ...adminOnlyItems, ...platformAdminItems];
 
   return (
     <>
@@ -120,7 +131,6 @@ export default function Sidebar({
               pathname={pathname}
               onItemClick={() => setIsMobileOpen(false)}
             />
-            <AccountBlock />
           </aside>
         </div>
       )}
@@ -133,7 +143,7 @@ export default function Sidebar({
         </div>
 
         <NavList menuItems={menuItems} pathname={pathname} />
-        <AccountBlock />
+        
       </aside>
     </>
   );
@@ -151,12 +161,12 @@ function BusinessBadge({
   if (logoUrl) {
     return (
       <Image
-  src={cloudinaryTransform(logoUrl, LOGO_THUMBNAIL)}
-  alt={businessName}
-  width={size}
-  height={size}
-  className="rounded-lg object-cover"
-/>
+        src={cloudinaryTransform(logoUrl, LOGO_THUMBNAIL)}
+        alt={businessName}
+        width={size}
+        height={size}
+        className="rounded-lg object-cover"
+      />
     );
   }
   return (
@@ -206,29 +216,5 @@ function NavList({
         );
       })}
     </nav>
-  );
-}
-
-function AccountBlock() {
-  return (
-    <div className="mt-auto flex flex-col gap-1 border-t border-black/10 pt-4">
-      <Link
-        href="/dashboard/account"
-        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-black/60 transition-colors hover:bg-black/5"
-      >
-        <FiSettings size={16} />
-        Mi cuenta
-      </Link>
-
-      <form action={signOutAction}>
-        <button
-          type="submit"
-          className="flex w-full items-center gap-2 px-4 py-2 rounded-xl text-sm text-black/60 transition-colors hover:bg-red-50 hover:text-red-600"
-        >
-          <FiLogOut size={16} />
-          Cerrar sesión
-        </button>
-      </form>
-    </div>
   );
 }

@@ -9,11 +9,14 @@ import {
   convertReservationToOrder,
 } from '@/lib/queries/reservations'
 import type { ReservationStatus, OrderSource } from '@/lib/types'
+import { getOrCreateCustomerByPhone } from '@/lib/queries/aiConversations'
 import { revalidatePath } from 'next/cache'
 
 export async function createReservationAction(formData: FormData) {
   const businessId = formData.get('businessId') as string
-  const customerId = (formData.get('customerId') as string) || null
+  let customerId = (formData.get('customerId') as string) || null
+  const customerPhone = (formData.get('customerPhone') as string)?.trim()
+  const customerName = (formData.get('customerName') as string)?.trim()
   const tableId = (formData.get('tableId') as string) || null
   const reservationDate = formData.get('reservationDate') as string
   const reservationTime = formData.get('reservationTime') as string
@@ -28,6 +31,16 @@ export async function createReservationAction(formData: FormData) {
   }
   if (peopleCount < 1) {
     throw new Error('El número de personas debe ser al menos 1')
+  }
+
+  // Si no viene un customerId ya resuelto (ej. desde un picker), pero sí
+  // un teléfono (ej. formulario manual del dashboard), buscamos o
+  // creamos el cliente por ese teléfono.
+  if (!customerId) {
+    if (!customerPhone) {
+      throw new Error('Debes indicar un cliente existente o un teléfono')
+    }
+    customerId = await getOrCreateCustomerByPhone(businessId, customerPhone, customerName)
   }
 
   const reservation = await createReservation({

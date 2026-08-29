@@ -3,8 +3,11 @@ import { getCurrentUserBusiness } from '@/lib/queries/businesses';
 import { getCurrentUser } from '@/lib/auth/session';
 import AccountSettingsForm from '@/components/dashboard/account/AccountSettingsForm';
 import PasswordSection from '@/components/dashboard/account/PasswordSection';
+import { getBusinessHours } from '@/lib/queries/businessHours';
+import BusinessHoursEditor from '@/components/dashboard/account/BusinessHoursEditor';
 
 export default async function AccountPage() {
+  
   const [business, user] = await Promise.all([
     getCurrentUserBusiness(),
     getCurrentUser(),
@@ -13,7 +16,7 @@ export default async function AccountPage() {
   if (!business || !user) {
     redirect('/login');
   }
-
+const hours = await getBusinessHours(business.id);
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
@@ -24,7 +27,7 @@ export default async function AccountPage() {
       </div>
 
       <AccountSettingsForm business={business} loginEmail={user.email ?? ''} />
-
+      <BusinessHoursEditor initialHours={hours} />
       <PasswordSection />
     </div>
   );

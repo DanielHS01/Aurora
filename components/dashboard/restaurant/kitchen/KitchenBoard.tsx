@@ -2,51 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiClock, FiX, FiPlay, FiCheck } from 'react-icons/fi';
+import { FiClock, FiX, FiPlay, FiCheck, FiShoppingBag, FiAlertCircle } from 'react-icons/fi';
 
-import { updateKitchenTicketStatusAction } from '@/lib/actions/kitchen-actions';
+import {
+  updateKitchenTicketStatusAction,
+  acknowledgeTicketChangeAction,
+} from '@/lib/actions/kitchen-actions';
 import type { KitchenTicketWithOrder } from '@/lib/queries/kitchen';
 import type { KitchenTicketStatus } from '@/lib/types';
 
 interface KitchenBoardProps {
   businessId: string;
   tickets: KitchenTicketWithOrder[];
-}
-
-export default function KitchenBoard({ businessId, tickets }: KitchenBoardProps) {
-  const [selectedTicket, setSelectedTicket] = useState<KitchenTicketWithOrder | null>(
-    null
-  );
-
-  if (tickets.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/10 bg-gray-50/50 p-16">
-        <p className="text-black/50">No hay pedidos activos en cocina.</p>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {tickets.map((ticket) => (
-          <TicketCard
-            key={ticket.id}
-            ticket={ticket}
-            onClick={() => setSelectedTicket(ticket)}
-          />
-        ))}
-      </div>
-
-      {selectedTicket && (
-        <TicketDetailModal
-          businessId={businessId}
-          ticket={selectedTicket}
-          onClose={() => setSelectedTicket(null)}
-        />
-      )}
-    </>
-  );
 }
 
 const STATUS_LABEL: Record<KitchenTicketStatus, string> = {
@@ -81,8 +48,73 @@ function useElapsedMinutes(sentAt: string | null): number | null {
   return elapsed;
 }
 
-// Tarjeta de tamaño fijo — solo resumen, nunca crece con la cantidad
-// de ítems del pedido. El detalle completo vive en el modal.
+export default function KitchenBoard({ businessId, tickets: initialTickets }: KitchenBoardProps) {
+  // Estado local — se sincroniza con la prop cuando el servidor sí
+  // trae datos frescos (ej. por Realtime detectando un cambio de OTRA
+  // fuente), pero las acciones del propio usuario se reflejan aquí de
+  // inmediato, sin esperar una recarga completa.
+  const [tickets, setTickets] = useState(initialTickets);
+  const [prevInitialTickets, setPrevInitialTickets] = useState(initialTickets);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  
+
+  if (initialTickets !== prevInitialTickets) {
+    setPrevInitialTickets(initialTickets);
+    setTickets(initialTickets);
+  }
+
+  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) ?? null;
+
+  function updateTicketLocal(ticketId: string, updates: Partial<KitchenTicketWithOrder>) {
+    setTickets((prev) =>
+      prev.map((t) => (t.id === ticketId ? { ...t, ...updates } : t))
+    );
+  }
+
+  function removeTicketLocal(ticketId: string) {
+    setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+  }
+
+  if (tickets.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/10 bg-gray-50/50 p-16">
+        <p className="text-black/50">No hay pedidos activos en cocina.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {tickets.map((ticket) => (
+          <TicketCard
+            key={ticket.id}
+            ticket={ticket}
+            onClick={() => setSelectedTicketId(ticket.id)}
+          />
+        ))}
+      </div>
+
+      {selectedTicket && (
+        <TicketDetailModal
+          businessId={businessId}
+          ticket={selectedTicket}
+          onClose={() => setSelectedTicketId(null)}
+          onStatusChange={(newStatus) => {
+            if (newStatus === 'delivered' || newStatus === 'cancelled') {
+              // Sale de la grid — mismo filtro que ya aplica el servidor.
+              removeTicketLocal(selectedTicket.id);
+            } else {
+              updateTicketLocal(selectedTicket.id, { status: newStatus });
+            }
+          }}
+          onAcknowledged={() => updateTicketLocal(selectedTicket.id, { has_pending_changes: false })}
+        />
+      )}
+    </>
+  );
+}
+
 function TicketCard({
   ticket,
   onClick,
@@ -92,15 +124,26 @@ function TicketCard({
 }) {
   const elapsedMinutes = useElapsedMinutes(ticket.sent_at);
   const itemCount = ticket.order.items.reduce((sum, i) => sum + i.quantity, 0);
+  const hasPendingChanges = ticket.has_pending_changes ?? false;
 
   return (
     <button
       onClick={onClick}
-      className="flex h-40 flex-col justify-between rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:border-black/30"
+      className={`flex h-40 flex-col justify-between rounded-2xl border p-4 text-left transition ${
+        hasPendingChanges
+          ? 'animate-pulse border-amber-300 bg-amber-100'
+          : !ticket.order.table
+          ? 'border-amber-200 bg-amber-50 hover:border-amber-300'
+          : 'border-black/10 bg-white hover:border-black/30'
+      }`}
     >
       <div>
         <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold">
+          <span className="flex items-center gap-1.5 text-lg font-semibold">
+            {hasPendingChanges && <FiAlertCircle size={16} className="text-amber-700" />}
+            {!hasPendingChanges && !ticket.order.table && (
+              <FiShoppingBag size={16} className="text-amber-600" />
+            )}
             {ticket.order.table?.table_number
               ? `Mesa ${ticket.order.table.table_number}`
               : 'Para llevar'}
@@ -113,6 +156,7 @@ function TicketCard({
         </div>
         <p className="mt-1 text-sm text-black/40">
           {itemCount} ítem{itemCount !== 1 ? 's' : ''}
+          {hasPendingChanges && ' · ⚠️ Modificado'}
         </p>
       </div>
 
@@ -128,21 +172,34 @@ function TicketDetailModal({
   businessId,
   ticket,
   onClose,
+  onStatusChange,
+  onAcknowledged,
 }: {
   businessId: string;
   ticket: KitchenTicketWithOrder;
   onClose: () => void;
+  onStatusChange: (newStatus: KitchenTicketStatus) => void;
+  onAcknowledged: () => void;
 }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (ticket.has_pending_changes) {
+      acknowledgeTicketChangeAction(ticket.id, businessId)
+        .then(() => onAcknowledged())
+        .catch(() => {});
+    }
+    // Solo debe correr una vez al abrir este ticket, no en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket.id]);
 
   async function handleAdvance(newStatus: KitchenTicketStatus) {
     setLoading(true);
     setError('');
     try {
       await updateKitchenTicketStatusAction(ticket.id, businessId, newStatus);
-      router.refresh();
+      onStatusChange(newStatus);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ocurrió un error.');
@@ -176,10 +233,7 @@ function TicketDetailModal({
         </span>
 
         {error && (
-          <div
-            role="alert"
-            className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-          >
+          <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -187,20 +241,13 @@ function TicketDetailModal({
         <ul className="mt-5 space-y-3">
           {ticket.order.items.map((item) => (
             <li key={item.id} className="border-b border-black/5 pb-3 text-sm">
-              <span className="font-medium">{item.quantity}x</span>{' '}
-              {item.product_name}
+              <span className="font-medium">{item.quantity}x</span> {item.product_name}
               {item.options.length > 0 && (
                 <p className="ml-5 text-xs text-black/40">
-                  {item.options
-                    .map((o) => `${o.option_name}: ${o.option_value}`)
-                    .join(' · ')}
+                  {item.options.map((o) => `${o.option_name}: ${o.option_value}`).join(' · ')}
                 </p>
               )}
-              {item.notes && (
-                <p className="ml-5 text-xs italic text-black/40">
-                  {item.notes}
-                </p>
-              )}
+              {item.notes && <p className="ml-5 text-xs italic text-black/40">{item.notes}</p>}
             </li>
           ))}
         </ul>

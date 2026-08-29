@@ -8,6 +8,7 @@ import {
 } from '@/lib/queries/businesses'
 import { getCurrentUserRole } from '@/lib/queries/business-users'
 import type { BusinessRole } from '@/lib/types'
+import { assertNotInMaintenance } from '@/lib/utils/maintenanceGuard'
 
 const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const ROLES_THAT_CAN_EDIT_BUSINESS: BusinessRole[] = ['owner', 'admin']
@@ -76,6 +77,8 @@ export async function updateBusinessInfoAction(formData: FormData) {
     throw new Error('No se encontró tu negocio')
   }
 
+  await assertNotInMaintenance()
+
   const role = await getCurrentUserRole(business.id)
   if (!role || !ROLES_THAT_CAN_EDIT_BUSINESS.includes(role)) {
     throw new Error('No tienes permiso para editar la información del negocio')
@@ -108,6 +111,8 @@ export async function updateBusinessBrandingAction(formData: FormData) {
     throw new Error('No se encontró tu negocio')
   }
 
+  await assertNotInMaintenance()
+
   const role = await getCurrentUserRole(business.id)
   if (!role || !ROLES_THAT_CAN_EDIT_BUSINESS.includes(role)) {
     throw new Error('No tienes permiso para editar la marca del negocio')
@@ -128,11 +133,14 @@ export async function updateBusinessBrandingAction(formData: FormData) {
   revalidatePath('/dashboard/account')
   revalidatePath('/dashboard')
 }
+
 export async function updateBusinessLogoAction(logoUrl: string) {
   const business = await getCurrentUserBusiness()
   if (!business) {
     throw new Error('No se encontró tu negocio')
   }
+
+  await assertNotInMaintenance()
 
   const role = await getCurrentUserRole(business.id)
   if (!role || !ROLES_THAT_CAN_EDIT_BUSINESS.includes(role)) {

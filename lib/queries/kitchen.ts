@@ -36,14 +36,32 @@ export async function getActiveKitchenTickets(
 export async function getKitchenTicketByOrderId(orderId: string): Promise<KitchenTicket | null> {
   const supabase = await createClient()
 
+  // Antes usaba .maybeSingle(), que lanza error si hay más de una fila
+  // — con .limit(1) + orden por más reciente, siempre devuelve algo
+  // usable aunque existan duplicados de antes del fix.
   const { data, error } = await supabase
     .from('kitchen_tickets')
     .select('*')
     .eq('order_id', orderId)
-    .maybeSingle()
+    .order('sent_at', { ascending: false })
+    .limit(1)
 
-  if (error || !data) return null
-  return data
+  if (error || !data || data.length === 0) return null
+  return data[0]
+}
+export async function getActiveKitchenTicketByOrderId(orderId: string): Promise<KitchenTicket | null> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('kitchen_tickets')
+    .select('*')
+    .eq('order_id', orderId)
+    .not('status', 'in', '(delivered,cancelled)')
+    .order('sent_at', { ascending: false })
+    .limit(1)
+
+  if (error || !data || data.length === 0) return null
+  return data[0]
 }
 
 /**
@@ -101,4 +119,19 @@ export async function updateKitchenTicketStatus(
     throw new Error(`Error actualizando ticket de cocina: ${error?.message}`)
   }
   return data
+}
+export async function markTicketHasPendingChanges(ticketId: string, value: boolean): Promise<void> {
+  const supabase = await createClient()
+  await supabase
+    .from('kitchen_tickets')
+    .update({ has_pending_changes: value })
+    .eq('id', ticketId)
+}
+
+export async function markTicketChangesAcknowledged(ticketId: string): Promise<void> {
+  const supabase = await createClient()
+  await supabase
+    .from('kitchen_tickets')
+    .update({ has_pending_changes: false })
+    .eq('id', ticketId)
 }

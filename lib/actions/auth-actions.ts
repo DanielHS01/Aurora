@@ -7,11 +7,24 @@ import { generateBusinessSlug } from '@/lib/utils/slugify'
 import { createBusinessWithOwner } from '@/lib/queries/businesses'
 import { completeInvitedBusinessUser } from '@/lib/queries/business-users'
 import type { BusinessRole } from '@/lib/types'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const ALLOWED_BUSINESS_TYPES = ['restaurant', 'barbershop', 'optical'] as const
 type BusinessType = (typeof ALLOWED_BUSINESS_TYPES)[number]
 
+async function checkMaintenanceBlock(): Promise<void> {
+  const supabase = await createClient()
+  const { data: isActive } = await supabase.rpc('is_maintenance_active')
+
+  if (isActive) {
+    throw new Error(
+      'El sistema está en mantenimiento en este momento. Por favor intenta más tarde.'
+    )
+  }
+}
+
 export async function signUpAction(formData: FormData) {
+  await checkMaintenanceBlock()
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const fullName = (formData.get('fullName') as string)?.trim()
@@ -109,6 +122,44 @@ export async function completeBusinessSetupAction(): Promise<void> {
     },
   })
 }
+export async function retryBusinessSetupAction(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('No autenticado')
+  }
+
+  const name = (formData.get('businessName') as string)?.trim()
+  const businessType = formData.get('businessType') as string
+
+  if (!name) {
+    throw new Error('El nombre del negocio es obligatorio')
+  }
+  if (!ALLOWED_BUSINESS_TYPES.includes(businessType as BusinessType)) {
+    throw new Error('Selecciona un tipo de negocio válido')
+  }
+
+  const slug = generateBusinessSlug(name)
+
+  await createBusinessWithOwner({
+    name,
+    slug,
+    business_type: businessType as BusinessType,
+  })
+
+  await supabase.auth.updateUser({
+    data: {
+      pending_business_name: null,
+      pending_business_slug: null,
+      pending_business_type: null,
+    },
+  })
+
+  redirect('/dashboard')
+}
 export async function completeEmployeeInviteAction(password: string): Promise<void> {
   const supabase = await createClient()
 
@@ -157,7 +208,20 @@ export async function signInAction(formData: FormData) {
     throw new Error(translateAuthError(error.message))
   }
 
-  redirect('/dashboard')
+  const { data: maintenanceActive } = await supabase.rpc('is_maintenance_active')
+  if (maintenanceActive) {
+    const { data: isPlatformAdmin } = await supabase.rpc('is_current_user_platform_admin')
+    if (!isPlatformAdmin) {
+      await supabase.auth.signOut()
+      throw new Error(
+        'El sistema está en mantenimiento en este momento. Por favor intenta más tarde.'
+      )
+    }
+  }
+
+  // Sin redirect() aquí — LoginForm ya hace router.push + router.refresh
+  // después de que esta action resuelve sin error. Tener los dos
+  // mecanismos a la vez es lo que generaba el NEXT_REDIRECT en consola.
 }
 
 export async function signOutAction() {

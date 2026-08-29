@@ -49,9 +49,13 @@ export default function ConfirmEmailContent() {
     try {
       await completeBusinessSetupAction();
     } catch (err) {
-      console.error("Error creando negocio tras confirmación:", err);
-    }
-
+  console.error("Error creando negocio tras confirmación:", err);
+  setStatus("error");
+  setErrorMessage(
+    `[DEBUG] ${err instanceof Error ? err.message : 'Error desconocido'}`
+  );
+  return; // no sigas a "success" si esto falló
+}
     setStatus("success");
     setTimeout(() => router.push(next), 1200);
   }, [tokenHash, type, next, router]);
