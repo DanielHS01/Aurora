@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache'
 import { updateOrderStatus } from '@/lib/queries/orders'
 import { updateTableStatus } from '@/lib/queries/tables'
 import type { InvoiceWithItems } from '@/lib/queries/payments'
+import { getKitchenTicketByOrderId, updateKitchenTicketStatus } from '@/lib/queries/kitchen'
 
 
 export async function recordPaymentAction(businessId: string, formData: FormData) {
@@ -98,21 +99,34 @@ export async function checkoutOrderAction(
     throw new Error('El método de pago es obligatorio')
   }
 
+  // Esta cadena SÍ tiene dependencias reales (la factura necesita el
+  // pago registrado; actualizar su estado necesita el id de la factura
+  // recién creada) — se queda secuencial a propósito.
   await recordPayment(businessId, orderId, amount, method)
   const invoiceDraft = await createInvoiceFromOrder(orderId)
   const invoice = await updateInvoiceStatus(invoiceDraft.id, 'issued')
-  await updateOrderStatus(orderId, 'completed')
 
-  if (tableId) {
-    await updateTableStatus(tableId, 'available')
-  }
+  // Estos tres pasos NO dependen entre sí ni de lo anterior una vez el
+  // pago ya está confirmado — antes iban uno detrás de otro.
+  await Promise.all([
+    updateOrderStatus(orderId, 'completed'),
+    (async () => {
+      const ticket = await getKitchenTicketByOrderId(orderId)
+      if (ticket && ticket.status !== 'delivered' && ticket.status !== 'cancelled') {
+        await updateKitchenTicketStatus(ticket.id, 'delivered')
+      }
+    })(),
+    tableId ? updateTableStatus(tableId, 'available') : Promise.resolve(),
+  ])
 
   revalidatePath('/dashboard/tables')
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/dashboard/kitchen')
   revalidatePath('/dashboard/reports')
-  revalidatePath('/dashboard/invoices')
 
   return { invoice: invoiceDraft.items ? { ...invoice, items: invoiceDraft.items } : invoiceDraft }
 }
+
 export async function getInvoiceDetailAction(invoiceId: string, businessId: string) {
   await requireBusinessAccess(businessId)
   return getInvoiceById(invoiceId)

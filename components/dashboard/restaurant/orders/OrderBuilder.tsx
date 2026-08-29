@@ -1,8 +1,15 @@
-'use client'
+"use client";
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FiSearch, FiX, FiMinus, FiPlus, FiSend, FiTrash2 } from 'react-icons/fi';
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  FiSearch,
+  FiX,
+  FiMinus,
+  FiPlus,
+  FiSend,
+  FiTrash2,
+} from "react-icons/fi";
 
 import {
   addOrderItemAction,
@@ -10,12 +17,14 @@ import {
   updateOrderItemQuantityAction,
   cancelOrderAction,
   updateOrderStatusAction,
-} from '@/lib/actions/order-actions';
-import { createKitchenTicketAction } from '@/lib/actions/kitchen-actions';
-import type { OrderWithItems } from '@/lib/queries/orders';
-import type { CategoryWithProducts } from '@/lib/queries/menu';
+} from "@/lib/actions/order-actions";
+import { createKitchenTicketAction, notifyKitchenOrderChangedAction } from "@/lib/actions/kitchen-actions";
+import type { OrderWithItems } from "@/lib/queries/orders";
+import type { CategoryWithProducts } from "@/lib/queries/menu";
+import { useToast } from '@/components/dashboard/ToastProvider';
 
-type ProductWithOptions = CategoryWithProducts['products'][number];
+type ProductWithOptions = CategoryWithProducts["products"][number];
+
 
 interface OrderBuilderProps {
   businessId: string;
@@ -25,16 +34,16 @@ interface OrderBuilderProps {
 
 export default function OrderBuilder({
   businessId,
-  order,
+  order: initialOrder,
   menu,
 }: OrderBuilderProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [pickingProduct, setPickingProduct] = useState<ProductWithOptions | null>(
-    null
-  );
+  const [order, setOrder] = useState(initialOrder);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pickingProduct, setPickingProduct] =
+    useState<ProductWithOptions | null>(null);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const filteredCategories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -43,7 +52,7 @@ export default function OrderBuilder({
       .map((c) => ({
         ...c,
         products: c.products.filter((p) =>
-          p.name.toLowerCase().includes(query)
+          p.name.toLowerCase().includes(query),
         ),
       }))
       .filter((c) => c.products.length > 0);
@@ -61,77 +70,134 @@ export default function OrderBuilder({
 
   async function handleAddItem(
     product: ProductWithOptions,
-    options: { option_name: string; option_value: string; extra_price?: number }[]
+    options: {
+      option_name: string;
+      option_value: string;
+      extra_price?: number;
+    }[],
   ) {
-    setError('');
+    setError("");
     try {
       const formData = new FormData();
-      formData.set('orderId', order.id);
-      formData.set('productId', product.id);
-      formData.set('productName', product.name);
-      formData.set('quantity', '1');
-      formData.set('unitPrice', String(product.price));
-      formData.set('options', JSON.stringify(options));
+      formData.set("orderId", order.id);
+      formData.set("productId", product.id);
+      formData.set("productName", product.name);
+      formData.set("quantity", "1");
+      formData.set("unitPrice", String(product.price));
+      formData.set("options", JSON.stringify(options));
 
-      await addOrderItemAction(businessId, formData);
-      router.refresh();
+      const newItem = await addOrderItemAction(businessId, formData);
+
+      // Actualiza el pedido en memoria — sin pedirle nada nuevo al
+      // servidor, así el menú (categorías/opciones/valores) no se
+      // vuelve a consultar cada vez que se agrega un ítem.
+      setOrder((prev) => ({
+        ...prev,
+        items: [...prev.items, newItem],
+        total: (prev.total ?? 0) + (newItem.total_price ?? 0),
+      }));
+
       setPickingProduct(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(err instanceof Error ? err.message : "Ocurrió un error.");
     }
   }
 
   async function handleRemoveItem(orderItemId: string) {
+    setError("");
     try {
       await removeOrderItemAction(orderItemId, order.id, businessId);
-      router.refresh();
+
+      setOrder((prev) => {
+        const removed = prev.items.find((i) => i.id === orderItemId);
+        return {
+          ...prev,
+          items: prev.items.filter((i) => i.id !== orderItemId),
+          total: (prev.total ?? 0) - (removed?.total_price ?? 0),
+        };
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(err instanceof Error ? err.message : "Ocurrió un error.");
     }
   }
 
   async function handleQuantityChange(orderItemId: string, newQty: number) {
     if (newQty < 1) return;
+    setError("");
     try {
       await updateOrderItemQuantityAction(
         orderItemId,
         order.id,
         businessId,
-        newQty
+        newQty,
       );
-      router.refresh();
+
+      setOrder((prev) => {
+        const target = prev.items.find((i) => i.id === orderItemId);
+        if (!target) return prev;
+
+        const unitPrice =
+          target.quantity > 0 ? (target.total_price ?? 0) / target.quantity : 0;
+        const newTotalPrice = unitPrice * newQty;
+        const diff = newTotalPrice - (target.total_price ?? 0);
+
+        return {
+          ...prev,
+          items: prev.items.map((i) =>
+            i.id === orderItemId
+              ? { ...i, quantity: newQty, total_price: newTotalPrice }
+              : i,
+          ),
+          total: (prev.total ?? 0) + diff,
+        };
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(err instanceof Error ? err.message : "Ocurrió un error.");
     }
   }
 
   async function handleSendToKitchen() {
     if (order.items.length === 0) {
-      setError('Agrega al menos un ítem antes de enviar a cocina.');
+      setError("Agrega al menos un ítem antes de enviar a cocina.");
       return;
     }
     setSending(true);
-    setError('');
+    setError("");
     try {
       await createKitchenTicketAction(businessId, order.id);
-      await updateOrderStatusAction(order.id, businessId, 'confirmed', order.table_id);
-      router.push('/dashboard/tables');
+      await updateOrderStatusAction(
+        order.id,
+        businessId,
+        "confirmed",
+        order.table_id,
+      );
+      router.push(order.table_id ? "/dashboard/tables" : "/dashboard/orders");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(err instanceof Error ? err.message : "Ocurrió un error.");
     } finally {
       setSending(false);
     }
   }
 
   async function handleCancelOrder() {
-    if (!confirm('¿Cancelar este pedido? La mesa quedará libre.')) return;
+    if (!confirm("¿Cancelar este pedido? La mesa quedará libre.")) return;
     try {
       await cancelOrderAction(order.id, businessId, order.table_id);
-      router.push('/dashboard/tables');
+      router.push(order.table_id ? "/dashboard/tables" : "/dashboard/orders");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(err instanceof Error ? err.message : "Ocurrió un error.");
     }
   }
+  const { showToast } = useToast();
+  async function handleNotifyKitchenChange() {
+  try {
+    await notifyKitchenOrderChangedAction(businessId, order.id);
+    showToast('Cocina fue notificada del cambio.');
+    router.push(order.table_id ? '/dashboard/tables' : '/dashboard/orders');
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+  }
+}
 
   return (
     <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -161,8 +227,8 @@ export default function OrderBuilder({
                     disabled={product.is_sold_out}
                     className={`rounded-2xl border p-4 text-left transition ${
                       product.is_sold_out
-                        ? 'cursor-not-allowed border-black/5 bg-black/[0.02] opacity-50'
-                        : 'border-black/10 bg-white hover:border-black/30'
+                        ? "cursor-not-allowed border-black/5 bg-black/[0.02] opacity-50"
+                        : "border-black/10 bg-white hover:border-black/30"
                     }`}
                   >
                     <p className="font-medium">{product.name}</p>
@@ -172,7 +238,7 @@ export default function OrderBuilder({
                       </p>
                     ) : (
                       <p className="mt-1 text-sm text-black/50">
-                        ${product.price.toLocaleString('es-CO')}
+                        ${product.price.toLocaleString("es-CO")}
                       </p>
                     )}
                   </button>
@@ -186,7 +252,11 @@ export default function OrderBuilder({
       {/* Carrito del pedido */}
       <div className="flex flex-col rounded-2xl border border-black/10 bg-white p-5">
         <h3 className="mb-4 text-lg font-medium">
-          {order.table_id ? 'Pedido' : 'Pedido para llevar'}
+          {order.table_id
+            ? "Pedido"
+            : order.order_type === "delivery"
+              ? "Domicilio"
+              : "Pedido para llevar"}
         </h3>
 
         {error && (
@@ -216,7 +286,7 @@ export default function OrderBuilder({
                       <p className="mt-0.5 text-xs text-black/40">
                         {item.options
                           .map((o) => `${o.option_name}: ${o.option_value}`)
-                          .join(' · ')}
+                          .join(" · ")}
                       </p>
                     )}
                   </div>
@@ -253,7 +323,7 @@ export default function OrderBuilder({
                     </button>
                   </div>
                   <span className="text-sm font-medium">
-                    ${item.total_price.toLocaleString('es-CO')}
+                    ${(item.total_price ?? 0).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -264,17 +334,26 @@ export default function OrderBuilder({
         <div className="mt-4 space-y-3 border-t border-black/10 pt-4">
           <div className="flex justify-between font-medium">
             <span>Total</span>
-            <span>${(order.total ?? 0).toLocaleString('es-CO')}</span>
+            <span>${(order.total ?? 0).toLocaleString("es-CO")}</span>
           </div>
 
-          <button
-            onClick={handleSendToKitchen}
-            disabled={sending}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90 disabled:opacity-60"
-          >
-            <FiSend size={15} />
-            {sending ? 'Enviando...' : 'Enviar a cocina'}
-          </button>
+          {order.status === "pending" ? (
+            <button
+              onClick={handleSendToKitchen}
+              disabled={sending}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90 disabled:opacity-60"
+            >
+              <FiSend size={15} />
+              {sending ? "Enviando..." : "Enviar a cocina"}
+            </button>
+          ) : (
+            <button
+              onClick={handleNotifyKitchenChange}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-medium text-amber-700 hover:bg-amber-100"
+            >
+              Avisar a cocina del cambio
+            </button>
+          )}
 
           <button
             onClick={handleCancelOrder}
@@ -304,7 +383,11 @@ function OrderItemOptionsModal({
   product: ProductWithOptions;
   onClose: () => void;
   onConfirm: (
-    options: { option_name: string; option_value: string; extra_price?: number }[]
+    options: {
+      option_name: string;
+      option_value: string;
+      extra_price?: number;
+    }[],
   ) => void;
 }) {
   const [selections, setSelections] = useState<Record<string, string[]>>({});
@@ -313,7 +396,7 @@ function OrderItemOptionsModal({
     optionId: string,
     optionName: string,
     valueName: string,
-    maxSelect: number
+    maxSelect: number,
   ) {
     setSelections((prev) => {
       const current = prev[optionId] ?? [];
@@ -337,14 +420,18 @@ function OrderItemOptionsModal({
 
   function handleConfirm() {
     const missingRequired = product.options.find(
-      (opt) => opt.is_required && (selections[opt.id] ?? []).length === 0
+      (opt) => opt.is_required && (selections[opt.id] ?? []).length === 0,
     );
     if (missingRequired) {
       alert(`"${missingRequired.name}" es obligatorio.`);
       return;
     }
 
-    const options: { option_name: string; option_value: string; extra_price?: number }[] = [];
+    const options: {
+      option_name: string;
+      option_value: string;
+      extra_price?: number;
+    }[] = [];
     for (const opt of product.options) {
       const chosen = selections[opt.id] ?? [];
       for (const valueName of chosen) {
@@ -388,7 +475,7 @@ function OrderItemOptionsModal({
               <div className="space-y-1.5">
                 {option.values.map((value) => {
                   const isSelected = (selections[option.id] ?? []).includes(
-                    value.name
+                    value.name,
                   );
                   return (
                     <button
@@ -398,19 +485,19 @@ function OrderItemOptionsModal({
                           option.id,
                           option.name,
                           value.name,
-                          option.max_select ?? 1
+                          option.max_select ?? 1,
                         )
                       }
                       className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm transition ${
                         isSelected
-                          ? 'border-black bg-black text-white'
-                          : 'border-black/10 hover:border-black/30'
+                          ? "border-black bg-black text-white"
+                          : "border-black/10 hover:border-black/30"
                       }`}
                     >
                       <span>{value.name}</span>
                       {(value.extra_price ?? 0) > 0 && (
                         <span className="text-xs opacity-70">
-                          +${(value.extra_price ?? 0).toLocaleString('es-CO')}
+                          +${(value.extra_price ?? 0).toLocaleString("es-CO")}
                         </span>
                       )}
                     </button>

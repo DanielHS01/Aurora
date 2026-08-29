@@ -226,3 +226,22 @@ async function syncOrderItemsStatus(
     throw new Error(`Error sincronizando ítems del pedido: ${error.message}`)
   }
 }
+export async function getOrdersWithItems(
+  businessId: string,
+  filters?: { status?: OrderStatus }
+): Promise<(Order & { order_items: { quantity: number; total_price: number | null }[] })[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('orders')
+    .select('*, order_items(quantity, total_price)')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+
+  if (filters?.status) query = query.eq('status', filters.status)
+
+  const { data, error } = await query
+
+  if (error || !data) return []
+  return data as (Order & { order_items: { quantity: number; total_price: number | null }[] })[]
+}

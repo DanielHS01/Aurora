@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Business, BusinessRole } from '@/lib/types'
+import { assertNotInMaintenance } from '@/lib/utils/maintenanceGuard'
 
 /**
  * Devuelve el usuario autenticado actual, o null si no hay sesión.
@@ -81,6 +82,7 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
  * validar aquí evita queries innecesarias y te permite dar un error claro
  * ("no tienes acceso a este negocio") en vez de un error genérico de RLS.
  */
+// En lib/auth/session.ts, ajusta requireBusinessAccess:
 export async function requireBusinessAccess(businessId: string): Promise<void> {
   const supabase = await createClient()
   const user = await getCurrentUser()
@@ -88,6 +90,8 @@ export async function requireBusinessAccess(businessId: string): Promise<void> {
   if (!user) {
     throw new Error('No autenticado')
   }
+
+  await assertNotInMaintenance()
 
   const { data, error } = await supabase.rpc('user_has_business_access', {
     target_business_id: businessId,

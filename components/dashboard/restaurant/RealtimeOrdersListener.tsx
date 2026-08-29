@@ -17,10 +17,20 @@ export default function RealtimeOrdersListener({
   const router = useRouter();
   const { showToast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     audioRef.current = new Audio('/sounds/order-ready.mp3');
   }, []);
+
+  function scheduleRefresh() {
+    // Agrupa varios eventos que lleguen en una ráfaga corta (ej. una
+    // sola acción del servidor tocando dos tablas) en un solo refresh.
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      router.refresh();
+    }, 400);
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -37,29 +47,20 @@ export default function RealtimeOrdersListener({
           filter: `business_id=eq.${businessId}`,
         },
         (payload) => {
-          if (!isActive) return; // ignora eventos si este efecto ya se desmontó
+          if (!isActive) return;
 
           const newRow = payload.new as { status: string; table_id: string | null };
           const oldRow = payload.old as { status: string };
 
-          // Solo notifica en la transición exacta hacia "ready" — no en
-          // cada cambio de la tabla, para no saturar al mesero con
-          // avisos de cosas que no le competen (ej. cancelaciones).
           if (newRow.status === 'ready' && oldRow.status !== 'ready') {
             const table = tables.find((t) => t.id === newRow.table_id);
             const label = table ? `Mesa ${table.table_number}` : 'Un pedido';
 
             showToast(`🍽️ ${label} está listo para recoger`);
-            audioRef.current?.play().catch(() => {
-              // Los navegadores bloquean el autoplay de audio hasta que
-              // haya habido alguna interacción del usuario con la
-              // página — si falla, no rompemos nada, solo se pierde el
-              // sonido en ese caso puntual (el toast visual sigue
-              // apareciendo igual).
-            });
+            audioRef.current?.play().catch(() => {});
           }
 
-          router.refresh();
+          scheduleRefresh();
         }
       )
       .on(
@@ -71,13 +72,26 @@ export default function RealtimeOrdersListener({
           filter: `business_id=eq.${businessId}`,
         },
         () => {
-          if (isActive) router.refresh();
+          if (isActive) scheduleRefresh();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'kitchen_tickets',
+          filter: `business_id=eq.${businessId}`,
+        },
+        () => {
+          if (isActive) scheduleRefresh();
         }
       )
       .subscribe();
 
     return () => {
       isActive = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
   }, [businessId, router, showToast, tables]);

@@ -1,9 +1,12 @@
-import { getCurrentUserBusiness } from '@/lib/queries/businesses';
-import { getRestaurantTables, getBusinessAreas } from '@/lib/queries/tables';
-import { createClient } from '@/lib/supabase/server';
-import AreaManager from '@/components/dashboard/restaurant/AreaManager';
-import TableGrid, { type TableWithOrder } from '@/components/dashboard/restaurant/TableGrid';
-import RealtimeOrdersListener from '@/components/dashboard/restaurant/RealtimeOrdersListener';
+import { getCurrentUserBusiness } from "@/lib/queries/businesses";
+import { getRestaurantTables, getBusinessAreas } from "@/lib/queries/tables";
+import { createClient } from "@/lib/supabase/server";
+import AreaManager from "@/components/dashboard/restaurant/AreaManager";
+import TableGrid, {
+  type TableWithOrder,
+} from "@/components/dashboard/restaurant/TableGrid";
+import RealtimeOrdersListener from "@/components/dashboard/restaurant/RealtimeOrdersListener";
+import TakeawayOrderButton from "@/components/dashboard/restaurant/TakeawayOrderButton";
 
 export default async function TablesPage() {
   const business = await getCurrentUserBusiness();
@@ -15,10 +18,10 @@ export default async function TablesPage() {
     getRestaurantTables(business.id),
     getBusinessAreas(business.id),
     supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .eq('business_id', business.id)
-      .not('status', 'in', '(completed,cancelled)'),
+      .from("orders")
+      .select("*, order_items(*)")
+      .eq("business_id", business.id)
+      .not("status", "in", "(completed,cancelled)"),
   ]);
 
   const activeOrders = activeOrdersRes.data || [];
@@ -31,17 +34,21 @@ export default async function TablesPage() {
 
   return (
     <div>
-      <RealtimeOrdersListener businessId={business.id} 
-      tables={tables.map((t) => ({ id: t.id, table_number: t.table_number }))}/>
+      <RealtimeOrdersListener
+        businessId={business.id}
+        tables={tables.map((t) => ({ id: t.id, table_number: t.table_number }))}
+      />
       <header className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">Mesas</h1>
         <p className="mt-1 text-sm text-black/40">
           Administra el estado y los pedidos de cada mesa.
         </p>
       </header>
-
+      
       <AreaManager businessId={business.id} areas={areas} />
-
+<div className="mb-4 flex justify-end">
+        <TakeawayOrderButton businessId={business.id} />
+      </div>
       <TableGrid
         businessId={business.id}
         tables={tablesWithOrders}
@@ -51,4 +58,4 @@ export default async function TablesPage() {
   );
 }
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";

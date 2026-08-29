@@ -8,7 +8,9 @@ import {
   updateOrderItemQuantity,
   updateOrderStatus,
   cancelOrder,
+  getActiveOrderForTable,
 } from '@/lib/queries/orders'
+import { getKitchenTicketByOrderId, updateKitchenTicketStatus } from '@/lib/queries/kitchen'
 import { updateTableStatus } from '@/lib/queries/tables'
 import type { OrderStatus, OrderType } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
@@ -21,6 +23,16 @@ export async function createOrderAction(formData: FormData) {
 
   await requireBusinessAccess(businessId)
 
+  // Solo evita duplicados si hay mesa — un pedido para llevar sin mesa
+  // no tiene "mesa activa" contra la cual comparar, así que este chequeo
+  // no aplica en ese caso.
+  if (tableId) {
+    const existing = await getActiveOrderForTable(tableId)
+    if (existing) {
+      return existing
+    }
+  }
+
   const order = await createOrder({
     business_id: businessId,
     table_id: tableId,
@@ -28,8 +40,6 @@ export async function createOrderAction(formData: FormData) {
     order_type: orderType,
   })
 
-  // La mesa pasa a "ocupada" en cuanto se abre un pedido sobre ella —
-  // no hay trigger en la DB que haga esto, así que lo hace el código.
   if (tableId) {
     await updateTableStatus(tableId, 'occupied')
   }
@@ -128,10 +138,31 @@ export async function cancelOrderAction(
   await requireBusinessAccess(businessId)
   await cancelOrder(orderId)
 
+  // El pedido cancelado no debe dejar un ticket de cocina activo
+  // colgado — si existe, se cancela junto con el pedido.
+  const ticket = await getKitchenTicketByOrderId(orderId)
+  if (ticket) {
+    await updateKitchenTicketStatus(ticket.id, 'cancelled')
+  }
+
   if (tableId) {
     await updateTableStatus(tableId, 'available')
   }
 
   revalidatePath(`/dashboard/orders/${orderId}`)
   revalidatePath('/dashboard/tables')
+  revalidatePath('/dashboard/kitchen')
+}
+export async function markOrderPickedUpAction(orderId: string, businessId: string) {
+  await requireBusinessAccess(businessId)
+
+  const ticket = await getKitchenTicketByOrderId(orderId)
+  if (ticket) {
+    await updateKitchenTicketStatus(ticket.id, 'delivered')
+  }
+
+  await updateOrderStatus(orderId, 'served')
+
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/dashboard/kitchen')
 }

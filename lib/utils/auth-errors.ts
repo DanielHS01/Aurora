@@ -17,7 +17,7 @@ export function translateAuthError(message: string): string {
     'new password should be different from the old password': 'La nueva contraseña debe ser diferente a la anterior',
     'token has expired or is invalid': 'El enlace expiró o no es válido. Solicita uno nuevo',
     'signups not allowed for this instance': 'El registro no está disponible en este momento',
-    'user not found': 'No existe una cuenta con este correo',
+    'user not found': 'Correo o contraseña incorrectos',
   }
 
   for (const [key, translated] of Object.entries(errorMap)) {

@@ -31,6 +31,7 @@ export type Subscription = Tables<'subscriptions'>
 export type ActivityLog = Tables<'activity_logs'>
 export type OrderSource = Enums<'order_source'>
 
+
 // Inserts (lo que mandas para crear una fila)
 export type ProductInsert = TablesInsert<'products'>
 export type OrderInsert = TablesInsert<'orders'>
