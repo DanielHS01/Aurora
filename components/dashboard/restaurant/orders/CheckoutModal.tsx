@@ -19,6 +19,7 @@ interface CheckoutModalProps {
   orderId: string;
   tableId: string | null;
   total: number;
+  onPaymentSuccess?: () => void;
   onClose: () => void;
 }
 
@@ -27,6 +28,7 @@ export default function CheckoutModal({
   orderId,
   tableId,
   total,
+  onPaymentSuccess,
   onClose,
 }: CheckoutModalProps) {
   const router = useRouter();
@@ -80,6 +82,7 @@ export default function CheckoutModal({
       setInvoiceId(invoice.id);
       setInvoiceNumber(number);
       triggerPrint(invoice.id);
+      onPaymentSuccess?.();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ocurrió un error.');

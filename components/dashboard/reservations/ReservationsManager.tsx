@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiPlus, FiCheck, FiX, FiArrowRight } from 'react-icons/fi';
 
@@ -35,9 +35,20 @@ interface ReservationsManagerProps {
 
 export default function ReservationsManager({
   businessId,
-  reservations,
+  reservations: initialReservations,
 }: ReservationsManagerProps) {
+  const [reservations, setReservations] = useState(initialReservations);
   const [showCreate, setShowCreate] = useState(false);
+  const [prevInitialReservations, setPrevInitialReservations] = useState(initialReservations);
+
+  if (initialReservations !== prevInitialReservations) {
+    setPrevInitialReservations(initialReservations);
+    setReservations(initialReservations);
+  }
+
+  function updateReservationLocal(id: string, updates: Partial<ReservationWithDetails>) {
+    setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
+  }
 
   return (
     <div>
@@ -70,7 +81,12 @@ export default function ReservationsManager({
             </thead>
             <tbody className="divide-y divide-black/5">
               {reservations.map((r) => (
-                <ReservationRow key={r.id} businessId={businessId} reservation={r} />
+                <ReservationRow
+                  key={r.id}
+                  businessId={businessId}
+                  reservation={r}
+                  onUpdateLocal={(updates) => updateReservationLocal(r.id, updates)}
+                />
               ))}
             </tbody>
           </table>
@@ -87,9 +103,11 @@ export default function ReservationsManager({
 function ReservationRow({
   businessId,
   reservation,
+  onUpdateLocal,
 }: {
   businessId: string;
   reservation: ReservationWithDetails;
+  onUpdateLocal: (updates: Partial<ReservationWithDetails>) => void;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -98,7 +116,7 @@ function ReservationRow({
     setLoading(true);
     try {
       await updateReservationStatusAction(reservation.id, businessId, 'confirmed');
-      router.refresh();
+      onUpdateLocal({ status: 'confirmed' });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ocurrió un error.');
     } finally {
@@ -111,7 +129,7 @@ function ReservationRow({
     setLoading(true);
     try {
       await cancelReservationAction(reservation.id, businessId);
-      router.refresh();
+      onUpdateLocal({ status: 'cancelled' });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ocurrió un error.');
     } finally {
@@ -142,9 +160,7 @@ function ReservationRow({
       <td className="px-4 py-3">{reservation.people_count}</td>
       <td className="px-4 py-3 text-black/50 capitalize">{reservation.source}</td>
       <td className="px-4 py-3">
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASS[reservation.status ?? 'pending']}`}
-        >
+        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASS[reservation.status ?? 'pending']}`}>
           {STATUS_LABEL[reservation.status ?? 'pending']}
         </span>
       </td>

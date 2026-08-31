@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiPlus, FiEdit2 } from 'react-icons/fi';
 
@@ -28,45 +28,51 @@ interface TableGridProps {
 
 function getStatusDotClass(status: string | null): string {
   switch (status) {
-    case 'available':
-      return 'bg-emerald-500';
-    case 'occupied':
-      return 'bg-red-500';
-    case 'reserved':
-      return 'bg-orange-500';
-    case 'inactive':
-      return 'bg-gray-300';
-    default:
-      return 'bg-gray-300';
+    case 'available': return 'bg-emerald-500';
+    case 'occupied': return 'bg-red-500';
+    case 'reserved': return 'bg-orange-500';
+    case 'inactive': return 'bg-gray-300';
+    default: return 'bg-gray-300';
   }
 }
 
 function getStatusLabel(status: string | null): string {
   switch (status) {
-    case 'available':
-      return 'Libre';
-    case 'occupied':
-      return 'Ocupada';
-    case 'reserved':
-      return 'Reservada';
-    case 'inactive':
-      return 'Inactiva';
-    default:
-      return 'Sin estado';
+    case 'available': return 'Libre';
+    case 'occupied': return 'Ocupada';
+    case 'reserved': return 'Reservada';
+    case 'inactive': return 'Inactiva';
+    default: return 'Sin estado';
   }
 }
 
 export default function TableGrid({
   businessId,
-  tables,
+  tables: initialTables,
   areas,
 }: TableGridProps) {
+  // Estado local — las acciones del propio usuario (recoger, cobrar) se
+  // reflejan aquí al instante; la prop se sincroniza cuando el servidor
+  // trae datos frescos por otra vía (Realtime, navegación nueva).
+  const [tables, setTables] = useState(initialTables);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [prevInitialTables, setPrevInitialTables] = useState(initialTables);
+
+  if (initialTables !== prevInitialTables) {
+    setPrevInitialTables(initialTables);
+    setTables(initialTables);
+  }
 
   const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null;
   const editingTable = tables.find((t) => t.id === editingTableId) ?? null;
+
+  function updateTableLocal(tableId: string, updates: Partial<TableWithOrder>) {
+    setTables((prev) =>
+      prev.map((t) => (t.id === tableId ? { ...t, ...updates } : t))
+    );
+  }
 
   return (
     <section>
@@ -115,9 +121,7 @@ export default function TableGrid({
                     Mesa {table.table_number}
                   </h4>
                   <span
-                    className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(
-                      table.status
-                    )}`}
+                    className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(table.status)}`}
                     aria-hidden
                   />
                 </div>
@@ -149,6 +153,19 @@ export default function TableGrid({
             setEditingTableId(selectedTable.id);
             setSelectedTableId(null);
           }}
+          onOrderServed={() =>
+            updateTableLocal(selectedTable.id, {
+              activeOrder: selectedTable.activeOrder
+                ? { ...selectedTable.activeOrder, status: 'served' }
+                : null,
+            })
+          }
+          onCheckoutComplete={() =>
+            updateTableLocal(selectedTable.id, {
+              status: 'available',
+              activeOrder: null,
+            })
+          }
         />
       )}
 
@@ -177,20 +194,19 @@ function TableDetailModal({
   table,
   onClose,
   onEdit,
+  onOrderServed,
+  onCheckoutComplete,
 }: {
   businessId: string;
   table: TableWithOrder;
   onClose: () => void;
   onEdit: () => void;
+  onOrderServed: () => void;
+  onCheckoutComplete: () => void;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Se captura al momento de abrir el checkout, no se deriva de
-  // table.activeOrder de forma continua — así el modal de cobro no
-  // desaparece solo cuando el pedido cambia de estado (a "completed")
-  // tras el router.refresh() que dispara el propio pago.
   const [checkoutOrder, setCheckoutOrder] = useState<{
     orderId: string;
     total: number;
@@ -221,7 +237,7 @@ function TableDetailModal({
     setError('');
     try {
       await markOrderServedAction(table.activeOrder.id, businessId);
-      router.refresh();
+      onOrderServed();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ocurrió un error.');
     } finally {
@@ -240,11 +256,7 @@ function TableDetailModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-xl font-semibold">Mesa {table.table_number}</h3>
-          <span
-            className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(
-              table.status
-            )}`}
-          />
+          <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(table.status)}`} />
         </div>
 
         <p className="mb-4 text-xs text-black/40">
@@ -253,10 +265,7 @@ function TableDetailModal({
         </p>
 
         {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-          >
+          <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -268,10 +277,7 @@ function TableDetailModal({
             </p>
             <ul className="divide-y divide-black/5">
               {orderItems.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex justify-between py-2 text-sm"
-                >
+                <li key={item.id} className="flex justify-between py-2 text-sm">
                   <span>
                     {item.quantity}x {item.product_name}
                   </span>
@@ -283,9 +289,7 @@ function TableDetailModal({
             </ul>
             <div className="flex justify-between border-t border-black/10 pt-3 font-medium">
               <span>Total</span>
-              <span>
-                ${(table.activeOrder.total ?? 0).toLocaleString('es-CO')}
-              </span>
+              <span>${(table.activeOrder.total ?? 0).toLocaleString('es-CO')}</span>
             </div>
           </div>
         ) : (
@@ -308,9 +312,7 @@ function TableDetailModal({
           {table.activeOrder && (
             <>
               <button
-                onClick={() =>
-                  router.push(`/dashboard/orders/${table.activeOrder!.id}`)
-                }
+                onClick={() => router.push(`/dashboard/orders/${table.activeOrder!.id}`)}
                 className="w-full rounded-xl border border-black/10 py-2.5 text-sm font-medium text-black/70 hover:bg-black/5"
               >
                 Ver / editar pedido
@@ -364,6 +366,7 @@ function TableDetailModal({
           orderId={checkoutOrder.orderId}
           tableId={table.id}
           total={checkoutOrder.total}
+          onPaymentSuccess={onCheckoutComplete}
           onClose={() => {
             setCheckoutOrder(null);
             onClose();

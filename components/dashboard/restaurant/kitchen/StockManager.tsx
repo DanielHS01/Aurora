@@ -1,25 +1,26 @@
-"use client";
+'use client'
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { FiAlertTriangle, FiSearch, FiSliders, FiX } from "react-icons/fi";
+import { useMemo, useState } from 'react';
+import { FiAlertTriangle, FiSearch, FiSliders, FiX } from 'react-icons/fi';
 
-import { toggleProductSoldOutAction } from "@/lib/actions/menu-actions";
-import type { CategoryWithProducts } from "@/lib/queries/menu";
+import { toggleProductSoldOutAction } from '@/lib/actions/menu-actions';
+import type { CategoryWithProducts } from '@/lib/queries/menu';
 
 interface StockManagerProps {
   businessId: string;
   categories: CategoryWithProducts[];
 }
 
-export default function StockManager({
-  businessId,
-  categories,
-}: StockManagerProps) {
+export default function StockManager({ businessId, categories }: StockManagerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // Solo rastrea qué productos están marcados agotado — más simple que
+  // clonar toda la estructura de categorías/productos en estado local.
+  const [soldOutOverrides, setSoldOutOverrides] = useState<Record<string, boolean>>({});
 
   const allProducts = categories.flatMap((c) => c.products);
-  const soldOutCount = allProducts.filter((p) => p.is_sold_out).length;
+  const effectiveSoldOutCount = allProducts.filter(
+    (p) => soldOutOverrides[p.id] ?? (p.is_sold_out ?? false)
+  ).length;
 
   return (
     <>
@@ -29,10 +30,10 @@ export default function StockManager({
       >
         <FiSliders size={15} />
         Disponibilidad de platos
-        {soldOutCount > 0 && (
+        {effectiveSoldOutCount > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
             <FiAlertTriangle size={11} />
-            {soldOutCount}
+            {effectiveSoldOutCount}
           </span>
         )}
       </button>
@@ -41,6 +42,10 @@ export default function StockManager({
         <StockManagerModal
           businessId={businessId}
           categories={categories}
+          overrides={soldOutOverrides}
+          onToggleLocal={(productId, value) =>
+            setSoldOutOverrides((prev) => ({ ...prev, [productId]: value }))
+          }
           onClose={() => setIsOpen(false)}
         />
       )}
@@ -51,14 +56,17 @@ export default function StockManager({
 function StockManagerModal({
   businessId,
   categories,
+  overrides,
+  onToggleLocal,
   onClose,
 }: {
   businessId: string;
   categories: CategoryWithProducts[];
+  overrides: Record<string, boolean>;
+  onToggleLocal: (productId: string, value: boolean) => void;
   onClose: () => void;
 }) {
-  const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const filteredCategories = useMemo(() => {
@@ -68,24 +76,21 @@ function StockManagerModal({
     return categories
       .map((c) => ({
         ...c,
-        products: c.products.filter((p) =>
-          p.name.toLowerCase().includes(query),
-        ),
+        products: c.products.filter((p) => p.name.toLowerCase().includes(query)),
       }))
       .filter((c) => c.products.length > 0);
   }, [categories, searchQuery]);
 
   async function handleToggle(productId: string, currentlySoldOut: boolean) {
     setLoadingId(productId);
+    // Optimista: refleja el cambio de inmediato, antes de esperar al
+    // servidor — si falla, se revierte.
+    onToggleLocal(productId, !currentlySoldOut);
     try {
-      await toggleProductSoldOutAction(
-        productId,
-        businessId,
-        !currentlySoldOut,
-      );
-      router.refresh();
+      await toggleProductSoldOutAction(productId, businessId, !currentlySoldOut);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Ocurrió un error.");
+      onToggleLocal(productId, currentlySoldOut); // revierte
+      alert(err instanceof Error ? err.message : 'Ocurrió un error.');
     } finally {
       setLoadingId(null);
     }
@@ -120,9 +125,7 @@ function StockManagerModal({
 
         <div className="flex-1 overflow-y-auto">
           {filteredCategories.length === 0 ? (
-            <p className="py-8 text-center text-sm text-black/40">
-              Sin resultados.
-            </p>
+            <p className="py-8 text-center text-sm text-black/40">Sin resultados.</p>
           ) : (
             filteredCategories.map((category) => (
               <div key={category.id} className="mb-4">
@@ -131,43 +134,26 @@ function StockManagerModal({
                 </p>
                 <div className="space-y-1">
                   {category.products.map((product) => {
-                    const isSoldOut = product.is_sold_out ?? false;
+                    const isSoldOut = overrides[product.id] ?? (product.is_sold_out ?? false);
                     return (
                       <div
                         key={product.id}
                         className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-black/[0.02]"
                       >
-                        <span
-                          className={`text-sm ${
-                            isSoldOut ? "text-black/40 line-through" : ""
-                          }`}
-                        >
+                        <span className={`text-sm ${isSoldOut ? 'text-black/40 line-through' : ''}`}>
                           {product.name}
                         </span>
                         <button
-                          onClick={() =>
-                            handleToggle(
-                              product.id,
-                              product.is_sold_out ?? false,
-                            )
-                          }
+                          onClick={() => handleToggle(product.id, isSoldOut)}
                           disabled={loadingId === product.id}
                           className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-                            product.is_sold_out
-                              ? "bg-red-500"
-                              : "bg-emerald-500"
+                            isSoldOut ? 'bg-red-500' : 'bg-emerald-500'
                           }`}
-                          aria-label={
-                            product.is_sold_out
-                              ? "Marcar disponible"
-                              : "Marcar agotado"
-                          }
+                          aria-label={isSoldOut ? 'Marcar disponible' : 'Marcar agotado'}
                         >
                           <span
                             className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                              product.is_sold_out
-                                ? "translate-x-5"
-                                : "translate-x-0"
+                              isSoldOut ? 'translate-x-5' : 'translate-x-0'
                             }`}
                           />
                         </button>
