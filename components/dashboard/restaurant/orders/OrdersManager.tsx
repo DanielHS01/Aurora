@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiShoppingBag, FiTruck, FiCheck, FiEye } from 'react-icons/fi';
 
@@ -9,6 +9,7 @@ import CheckoutModal from './CheckoutModal';
 import type { Database } from '@/lib/types/database.types';
 
 type Order = Database['public']['Tables']['orders']['Row'];
+type OrderWithItems = Order & { order_items: { quantity: number; total_price: number | null }[] };
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Armando pedido',
@@ -28,24 +29,37 @@ const STATUS_CLASS: Record<string, string> = {
 
 export default function OrdersManager({
   businessId,
-  orders,
+  orders: initialOrders,
 }: {
   businessId: string;
-  orders: (Order & { order_items: { quantity: number; total_price: number | null }[] })[];
+  orders: OrderWithItems[];
 }) {
   const router = useRouter();
+  const [orders, setOrders] = useState(initialOrders);
   const [checkoutOrder, setCheckoutOrder] = useState<{ orderId: string; total: number } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [prevInitialOrders, setPrevInitialOrders] = useState(initialOrders);
 
-  // Solo pedidos sin mesa — los que sí tienen mesa se gestionan desde
-  // /dashboard/tables, para no duplicar controles en dos pantallas.
+  if (initialOrders !== prevInitialOrders) {
+    setPrevInitialOrders(initialOrders);
+    setOrders(initialOrders);
+  }
+
   const takeawayOrders = orders.filter((o) => !o.table_id);
+
+  function updateOrderLocal(orderId: string, updates: Partial<OrderWithItems>) {
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o)));
+  }
+
+  function removeOrderLocal(orderId: string) {
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+  }
 
   async function handleMarkPickedUp(orderId: string) {
     setLoadingId(orderId);
     try {
       await markOrderPickedUpAction(orderId, businessId);
-      router.refresh();
+      updateOrderLocal(orderId, { status: 'served' });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ocurrió un error.');
     } finally {
@@ -109,9 +123,7 @@ export default function OrdersManager({
 
                 {order.payment_status !== 'paid' && (
                   <button
-                    onClick={() =>
-                      setCheckoutOrder({ orderId: order.id, total: order.total ?? 0 })
-                    }
+                    onClick={() => setCheckoutOrder({ orderId: order.id, total: order.total ?? 0 })}
                     className="rounded-xl bg-[var(--brand-primary)] py-2 text-sm font-medium text-[var(--brand-secondary)]"
                   >
                     💳 Cobrar
@@ -129,9 +141,15 @@ export default function OrdersManager({
           orderId={checkoutOrder.orderId}
           tableId={null}
           total={checkoutOrder.total}
+          onPaymentSuccess={() =>
+            updateOrderLocal(checkoutOrder.orderId, { payment_status: 'paid', status: 'completed' })
+          }
           onClose={() => {
+            // Si ya quedó completado, sale de la lista (mismo filtro
+            // que aplica el servidor para pedidos activos).
+            const wasCompleting = orders.find((o) => o.id === checkoutOrder.orderId)?.payment_status === 'paid';
+            if (wasCompleting) removeOrderLocal(checkoutOrder.orderId);
             setCheckoutOrder(null);
-            router.refresh();
           }}
         />
       )}

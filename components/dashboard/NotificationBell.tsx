@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { FiBell, FiX } from 'react-icons/fi';
 
 import { markNotificationRead } from '@/lib/actions/notificationActions';
@@ -14,16 +13,22 @@ type Notification = {
 };
 
 export default function NotificationBell({
-  notifications,
+  notifications: initialNotifications,
 }: {
   notifications: Notification[];
 }) {
-  const router = useRouter();
+  const [notifications, setNotifications] = useState(initialNotifications);
   const [isOpen, setIsOpen] = useState(false);
 
   async function handleDismiss(id: string) {
-    await markNotificationRead(id);
-    router.refresh();
+    // Optimista: desaparece de la lista al instante.
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await markNotificationRead(id);
+    } catch {
+      // Si falla, no revertimos — peor caso es que reaparezca en la
+      // próxima carga real de la página, sin bloquear al usuario ahora.
+    }
   }
 
   return (
@@ -42,20 +47,10 @@ export default function NotificationBell({
       </button>
 
       {isOpen && (
-        <>
-          {/* Backdrop: solo detecta el clic afuera para cerrar. No debe
-              envolver el panel, porque su `fixed` crearía un nuevo
-              contenedor de referencia y rompería el anclaje del panel
-              a la campana (bug que causaba el desfase con el banner). */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setIsOpen(false)}
-          />
-
-          {/* Panel: hermano del backdrop, anclado al div `relative` de
-              la campana — así respeta el flujo normal del documento. */}
+        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}>
           <div
             className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-black/10 bg-white p-3 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
           >
             {notifications.length === 0 ? (
               <p className="p-4 text-center text-sm text-black/40">
@@ -64,10 +59,7 @@ export default function NotificationBell({
             ) : (
               <div className="max-h-96 space-y-2 overflow-y-auto">
                 {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className="rounded-xl border border-black/10 p-3"
-                  >
+                  <div key={n.id} className="rounded-xl border border-black/10 p-3">
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <p className="text-sm font-medium">{n.title}</p>
                       <button
@@ -78,15 +70,13 @@ export default function NotificationBell({
                         <FiX size={14} />
                       </button>
                     </div>
-                    <p className="whitespace-pre-line text-xs text-black/50">
-                      {n.message}
-                    </p>
+                    <p className="whitespace-pre-line text-xs text-black/50">{n.message}</p>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
