@@ -14,6 +14,8 @@ import { updateOrderStatus } from '@/lib/queries/orders'
 import { updateTableStatus } from '@/lib/queries/tables'
 import type { InvoiceWithItems } from '@/lib/queries/payments'
 import { getKitchenTicketByOrderId, updateKitchenTicketStatus } from '@/lib/queries/kitchen'
+import { attachPaymentToCashSession } from '@/lib/queries/cashRegister'
+
 
 
 export async function recordPaymentAction(businessId: string, formData: FormData) {
@@ -105,7 +107,8 @@ export async function checkoutOrderAction(
   await recordPayment(businessId, orderId, amount, method)
   const invoiceDraft = await createInvoiceFromOrder(orderId)
   const invoice = await updateInvoiceStatus(invoiceDraft.id, 'issued')
-
+  const paymentId = await recordPayment(businessId, orderId, amount, method)
+await attachPaymentToCashSession(paymentId, businessId)
   // Estos tres pasos NO dependen entre sí ni de lo anterior una vez el
   // pago ya está confirmado — antes iban uno detrás de otro.
   await Promise.all([
