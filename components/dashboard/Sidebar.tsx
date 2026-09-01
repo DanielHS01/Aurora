@@ -1,11 +1,11 @@
-'use client'
-import { useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import {FiMenu, FiX } from 'react-icons/fi';
+"use client";
+import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { FiMenu, FiX } from "react-icons/fi";
 
-import { cloudinaryTransform, LOGO_THUMBNAIL } from '@/lib/utils/cloudinary';
+import { cloudinaryTransform, LOGO_THUMBNAIL } from "@/lib/utils/cloudinary";
 
 interface SidebarProps {
   businessName: string;
@@ -17,43 +17,43 @@ interface SidebarProps {
 
 const MENU_BY_TYPE: Record<string, { name: string; path: string }[]> = {
   restaurant: [
-    { name: 'Panel', path: '/dashboard' },
-    { name: 'Mesas', path: '/dashboard/tables' },
-    { name: 'Pedidos', path: '/dashboard/orders' },
-    { name: 'Cocina / Pedidos', path: '/dashboard/kitchen' },
-    { name: 'Menú', path: '/dashboard/menu' },
-    { name: 'Reservas', path: '/dashboard/reservations' },
-    { name: 'Facturas', path: '/dashboard/invoices' },
-    { name: 'Reportes', path: '/dashboard/reports' },
+    { name: "Panel", path: "/dashboard" },
+    { name: "Mesas", path: "/dashboard/tables" },
+    { name: "Pedidos", path: "/dashboard/orders" },
+    { name: "Cocina / Pedidos", path: "/dashboard/kitchen" },
+    { name: "Menú", path: "/dashboard/menu" },
+    { name: "Reservas", path: "/dashboard/reservations" },
+    { name: "Facturas", path: "/dashboard/invoices" },
+    { name: "Reportes", path: "/dashboard/reports" },
   ],
-  'barber shop': [
-    { name: 'Panel', path: '/dashboard' },
-    { name: 'Citas', path: '/dashboard/appointments' },
-    { name: 'Servicios', path: '/dashboard/services' },
-    { name: 'Reportes', path: '/dashboard/reports' },
+  "barber shop": [
+    { name: "Panel", path: "/dashboard" },
+    { name: "Citas", path: "/dashboard/appointments" },
+    { name: "Servicios", path: "/dashboard/services" },
+    { name: "Reportes", path: "/dashboard/reports" },
   ],
   optical: [
-    { name: 'Panel', path: '/dashboard' },
-    { name: 'Citas', path: '/dashboard/appointments' },
-    { name: 'Inventario', path: '/dashboard/inventory' },
-    { name: 'Reportes', path: '/dashboard/reports' },
+    { name: "Panel", path: "/dashboard" },
+    { name: "Citas", path: "/dashboard/appointments" },
+    { name: "Inventario", path: "/dashboard/inventory" },
+    { name: "Reportes", path: "/dashboard/reports" },
   ],
   hotel: [
-    { name: 'Panel', path: '/dashboard' },
-    { name: 'Reservas', path: '/dashboard/reservations' },
-    { name: 'Habitaciones', path: '/dashboard/rooms' },
-    { name: 'Reportes', path: '/dashboard/reports' },
+    { name: "Panel", path: "/dashboard" },
+    { name: "Reservas", path: "/dashboard/reservations" },
+    { name: "Habitaciones", path: "/dashboard/rooms" },
+    { name: "Reportes", path: "/dashboard/reports" },
   ],
 };
 
-const DEFAULT_MENU = [{ name: 'Panel', path: '/dashboard' }];
+const DEFAULT_MENU = [{ name: "Panel", path: "/dashboard" }];
 
 export default function Sidebar({
   businessName,
   logoUrl,
   businessType,
   userRole,
-  isPlatformAdmin = false
+  isPlatformAdmin = false,
 }: SidebarProps) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -61,19 +61,32 @@ export default function Sidebar({
   const baseMenuItems =
     (businessType && MENU_BY_TYPE[businessType]) || DEFAULT_MENU;
 
-  const canManageTeam = userRole === 'owner' || userRole === 'admin';
+  const canManageTeam = userRole === "owner" || userRole === "admin";
 
   const adminOnlyItems = canManageTeam
     ? [
-        { name: 'Equipo', path: '/dashboard/team' },
-        { name: 'Canales de IA', path: '/dashboard/ai-channels' },
+        { name: "Equipo", path: "/dashboard/team" },
+        { name: "Canales de IA", path: "/dashboard/ai-channels" },
       ]
     : [];
   const platformAdminItems = isPlatformAdmin
-    ? [{ name: '⚙️ Panel de Aurora', path: '/admin' }]
+    ? [{ name: "⚙️ Panel de Aurora", path: "/admin" }]
+    : [];
+  const canManageCash = ["owner", "admin", "manager", "cashier"].includes(
+    userRole ?? "",
+  );
+
+  const cashRegisterItem = canManageCash
+    ? [{ name: "Caja", path: "/dashboard/cash-register" }]
     : [];
 
-  const menuItems = [...baseMenuItems, ...adminOnlyItems, ...platformAdminItems];
+  const menuItems = [
+    ...baseMenuItems,
+    ...adminOnlyItems,
+    ...cashRegisterItem,
+    ...platformAdminItems,
+    
+  ];
 
   return (
     <>
@@ -85,9 +98,7 @@ export default function Sidebar({
             logoUrl={logoUrl}
             size={30}
           />
-          <span className="truncate text-sm font-semibold">
-            {businessName}
-          </span>
+          <span className="truncate text-sm font-semibold">{businessName}</span>
         </div>
         <button
           onClick={() => setIsMobileOpen(true)}
@@ -138,12 +149,15 @@ export default function Sidebar({
       {/* Sidebar fijo — solo en desktop */}
       <aside className="hidden h-full w-64 flex-col border-r border-black/10 p-6 md:flex">
         <div className="mb-10 flex items-center gap-3">
-          <BusinessBadge businessName={businessName} logoUrl={logoUrl} size={36} />
+          <BusinessBadge
+            businessName={businessName}
+            logoUrl={logoUrl}
+            size={36}
+          />
           <span className="truncate font-semibold">{businessName}</span>
         </div>
 
         <NavList menuItems={menuItems} pathname={pathname} />
-        
       </aside>
     </>
   );
@@ -173,7 +187,7 @@ function BusinessBadge({
     <div
       className="flex items-center justify-center rounded-lg text-sm font-bold text-white"
       style={{
-        backgroundColor: 'var(--brand-primary)',
+        backgroundColor: "var(--brand-primary)",
         width: size,
         height: size,
       }}
@@ -205,8 +219,8 @@ function NavList({
             style={
               isActive
                 ? {
-                    backgroundColor: 'var(--brand-primary)',
-                    color: 'var(--brand-secondary)',
+                    backgroundColor: "var(--brand-primary)",
+                    color: "var(--brand-secondary)",
                   }
                 : undefined
             }
