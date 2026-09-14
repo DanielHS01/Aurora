@@ -8,6 +8,8 @@ import { getUnreadNotifications } from '@/lib/queries/notifications';
 import { getActiveMaintenanceAnnouncement } from '@/lib/queries/platformAdmin';
 import MaintenanceBanner from '@/components/dashboard/MaintenanceBanner';
 import { isPlatformAdmin } from '@/lib/auth/platform';
+import { getSubscriptionWithPlan } from '@/lib/queries/subscriptionBilling';
+import TrialBanner from '@/components/dashboard/TrialBanner';
 
 export default async function DashboardLayout({
   children,
@@ -20,13 +22,15 @@ export default async function DashboardLayout({
     redirect('/setup-business');
   }
 
-  const [role, notifications, maintenanceAnnouncement, isAdmin] = await Promise.all([
-    getCurrentUserRole(business.id),
-    getUnreadNotifications(business.id),
-    getActiveMaintenanceAnnouncement(),
-    isPlatformAdmin(),
-  ]);
-
+  const [role, notifications, maintenanceAnnouncement, isAdmin, subscription] = await Promise.all([
+  getCurrentUserRole(business.id),
+  getUnreadNotifications(business.id),
+  getActiveMaintenanceAnnouncement(),
+  isPlatformAdmin(),
+  getSubscriptionWithPlan(business.id),
+]);
+  const trialDaysLeft = subscription?.status === 'trial' ? subscription.daysLeft : null;
+    
   return (
     <ToastProvider>
       <div
@@ -39,7 +43,8 @@ export default async function DashboardLayout({
         }
       >
         <MaintenanceBanner announcement={maintenanceAnnouncement} />
-
+        <TrialBanner status={subscription?.status ?? null} daysLeft={trialDaysLeft} />
+        
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <Sidebar
             businessName={business.name}
