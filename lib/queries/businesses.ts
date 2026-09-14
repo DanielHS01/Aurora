@@ -121,6 +121,35 @@ export async function createBusinessWithOwner(
     throw new Error(`Error asignando owner: ${ownerError.message}`)
   }
 
+  // Todo negocio nuevo arranca con 14 días de prueba gratuita —
+  // automático, sin que nadie tenga que pagarlo ni configurarlo.
+  const { data: trialPlan } = await supabase
+    .from('plans')
+    .select('id')
+    .eq('name', 'Prueba gratuita')
+    .single()
+
+  if (trialPlan) {
+    const now = new Date()
+    const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+
+    const { error: subError } = await supabase.from('subscriptions').insert({
+      business_id: newBusiness.id,
+      plan_id: trialPlan.id,
+      status: 'trial',
+      started_at: now.toISOString(),
+      current_period_start: now.toISOString(),
+      current_period_end: trialEnd.toISOString(),
+    })
+
+    if (subError) {
+      // No bloqueamos la creación del negocio por esto — el negocio
+      // ya existe y es usable; la suscripción se puede corregir
+      // manualmente después si algo falla aquí puntualmente.
+      console.error('Error creando suscripción de prueba:', subError.message)
+    }
+  }
+
   return newBusiness
 }
 

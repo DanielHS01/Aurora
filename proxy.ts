@@ -1,10 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-
-
 const PUBLIC_ROUTES = [
-  "/",
   "/login",
   "/register",
   "/auth/callback",
@@ -13,7 +10,14 @@ const PUBLIC_ROUTES = [
   "/reset-password",
   "/update-password",
   "/maintenance",
+  "/subscription-locked",
 ];
+
+// Rutas exentas del bloqueo por mora — el negocio SIEMPRE debe poder
+// llegar a /dashboard/account para pagar y desbloquearse él mismo, o
+// quedaría atrapado sin forma de salir del bloqueo (mismo patrón de
+// bug que ya vimos con /login durante mantenimiento).
+const LOCK_EXEMPT_ROUTES = ["/dashboard/account", "/subscription-locked"];
 
 // Caché breve en memoria — evita consultar Supabase en cada request
 // mientras no hay mantenimiento. Vive mientras la instancia de Edge
@@ -43,7 +47,9 @@ function redirectWithCookies(url: URL, response: NextResponse): NextResponse {
   });
   return redirectResponse;
 }
+
 const MAINTENANCE_EXEMPT_ROUTES = ["/login", "/maintenance"];
+
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -82,9 +88,12 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicRoute = PUBLIC_ROUTES.some((route) =>
-    pathname.startsWith(route),
-  );
+  // "/" ya NO va en PUBLIC_ROUTES con startsWith: antes causaba que
+  // TODA ruta calificara como pública (cualquier pathname empieza con
+  // "/"). Se chequea aparte, solo como coincidencia exacta.
+  const isPublicRoute =
+    pathname === "/" ||
+    PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
   const isAdminRoute = pathname.startsWith("/admin");
 
   if (!isAdminRoute) {
@@ -113,6 +122,45 @@ export async function proxy(request: NextRequest) {
           );
         }
         return response;
+      }
+    }
+  }
+
+  // Bloqueo por mora: se evalúa según si el NEGOCIO es interno de
+  // Aurora (business.is_internal), NO según si el usuario logueado es
+  // platform admin. Un superadmin ligado a un negocio real (no
+  // interno) sí debe verse afectado por el bloqueo, igual que
+  // cualquier otro dueño — la exención de plataforma es para
+  // mantenimiento (gestionar Aurora en sí), no para eximir del cobro a
+  // cualquier negocio que un admin use para probar.
+  if (
+    user &&
+    !isPublicRoute &&
+    !isAdminRoute &&
+    !LOCK_EXEMPT_ROUTES.some((route) => pathname.startsWith(route))
+  ) {
+    const { data: businessId } = await supabase.rpc(
+      "get_current_user_business_id",
+    );
+
+    if (businessId) {
+      const { data: businessRow } = await supabase
+        .from("businesses")
+        .select("is_internal")
+        .eq("id", businessId)
+        .single<{ is_internal: boolean }>();
+
+      if (!businessRow?.is_internal) {
+        const { data: lockStatus } = await supabase
+          .rpc("get_business_lock_status", { target_business_id: businessId })
+          .single<{ is_locked: boolean; days_overdue: number }>();
+
+        if (lockStatus?.is_locked) {
+          return redirectWithCookies(
+            new URL("/subscription-locked", request.url),
+            response,
+          );
+        }
       }
     }
   }
