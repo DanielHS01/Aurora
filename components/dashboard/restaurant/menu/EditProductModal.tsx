@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FiX } from 'react-icons/fi';
 
 import { updateProductAction } from '@/lib/actions/menu-actions';
+import { TAX_PRESETS, taxPresetFromProduct, type TaxPresetValue } from '@/lib/constants/taxPresets';
 import type { CategoryWithProducts } from '@/lib/queries/menu';
 import ProductImageUploader from './ProductImageUploader';
 
@@ -14,6 +15,7 @@ interface EditProductModalProps {
   businessId: string;
   product: ProductWithOptions;
   categories: CategoryWithProducts[];
+  isFactusActive: boolean;
   onClose: () => void;
 }
 
@@ -21,6 +23,7 @@ export default function EditProductModal({
   businessId,
   product,
   categories,
+  isFactusActive,
   onClose,
 }: EditProductModalProps) {
   const router = useRouter();
@@ -28,6 +31,7 @@ export default function EditProductModal({
   const [description, setDescription] = useState(product.description ?? '');
   const [price, setPrice] = useState(String(product.price));
   const [categoryId, setCategoryId] = useState(product.category_id ?? '');
+  const [taxPreset, setTaxPreset] = useState<TaxPresetValue>(() => taxPresetFromProduct(product));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -52,6 +56,7 @@ export default function EditProductModal({
       formData.set('description', description.trim());
       formData.set('price', price);
       formData.set('categoryId', categoryId);
+      if (isFactusActive) formData.set('taxPreset', taxPreset);
 
       await updateProductAction(product.id, businessId, formData);
       router.refresh();
@@ -148,6 +153,26 @@ export default function EditProductModal({
               ))}
             </select>
           </label>
+
+          {isFactusActive && (
+            <label className="block" htmlFor="editProductTax">
+              <span className="mb-2 block text-xs uppercase tracking-wide text-black/40">
+                Impuesto (DIAN)
+              </span>
+              <select
+                id="editProductTax"
+                value={taxPreset}
+                onChange={(e) => setTaxPreset(e.target.value as TaxPresetValue)}
+                className="h-12 w-full rounded-xl border border-black/10 bg-black/[0.02] px-4 text-sm outline-none focus:border-black/30"
+              >
+                {TAX_PRESETS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <button
             type="submit"

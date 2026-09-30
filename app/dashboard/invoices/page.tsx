@@ -19,6 +19,9 @@ export default async function InvoicesPage({
   const sort = (
     typeof params.sort === 'string' ? params.sort : 'recent'
   ) as InvoiceSortOption;
+  const documentType = (
+    typeof params.doc === 'string' ? params.doc : ''
+  ) as '' | 'electronic' | 'local';
 
   const business = await getCurrentUserBusiness();
   if (!business) return null;
@@ -29,6 +32,7 @@ export default async function InvoicesPage({
     search,
     orderType,
     sort,
+    documentType: documentType || 'all',
   });
 
   return (
@@ -49,6 +53,7 @@ export default async function InvoicesPage({
         currentSearch={search}
         currentOrderType={orderType}
         currentSort={sort}
+        currentDocumentType={documentType}
       />
     </div>
   );

@@ -229,6 +229,9 @@ export type InvoiceFilters = {
   search?: string
   orderType?: OrderType
   sort?: InvoiceSortOption
+  // 'electronic' = tiene CUFE (se emitió ante la DIAN vía Factus)
+  // 'local' = solo comprobante interno, sin CUFE todavía/nunca
+  documentType?: 'all' | 'electronic' | 'local'
 }
 
 export async function getInvoicesPaginated(
@@ -236,7 +239,7 @@ export async function getInvoicesPaginated(
   filters: InvoiceFilters
 ): Promise<{ invoices: InvoiceWithDetails[]; totalCount: number }> {
   const supabase = await createClient()
-  const { page, pageSize, search, orderType, sort = 'recent' } = filters
+  const { page, pageSize, search, orderType, sort = 'recent', documentType = 'all' } = filters
 
   // Búsqueda por nombre de cliente: como el nombre vive en otra tabla,
   // primero resolvemos qué customer_id coinciden, y filtramos por eso.
@@ -284,6 +287,12 @@ export async function getInvoicesPaginated(
       conditions.push(`customer_id.in.(${matchingCustomerIds.join(',')})`)
     }
     query = query.or(conditions.join(','))
+  }
+
+  if (documentType === 'electronic') {
+    query = query.not('cufe', 'is', null)
+  } else if (documentType === 'local') {
+    query = query.is('cufe', null)
   }
 
   switch (sort) {

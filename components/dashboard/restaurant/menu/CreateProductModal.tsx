@@ -5,18 +5,21 @@ import { useRouter } from 'next/navigation';
 import { FiX, FiCheck } from 'react-icons/fi';
 
 import { createProductAction } from '@/lib/actions/menu-actions';
+import { TAX_PRESETS, type TaxPresetValue } from '@/lib/constants/taxPresets';
 import type { Product } from '@/lib/types';
 import ProductImageUploader from './ProductImageUploader';
 
 interface CreateProductModalProps {
   businessId: string;
   categoryId: string;
+  isFactusActive: boolean;
   onClose: () => void;
 }
 
 export default function CreateProductModal({
   businessId,
   categoryId,
+  isFactusActive,
   onClose,
 }: CreateProductModalProps) {
   const router = useRouter();
@@ -24,6 +27,7 @@ export default function CreateProductModal({
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [preparationTime, setPreparationTime] = useState('');
+  const [taxPreset, setTaxPreset] = useState<TaxPresetValue>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,6 +59,7 @@ export default function CreateProductModal({
       formData.set('description', description.trim());
       formData.set('price', price);
       if (preparationTime) formData.set('preparationTime', preparationTime);
+      if (isFactusActive) formData.set('taxPreset', taxPreset);
 
       const product = await createProductAction(formData);
       setCreatedProduct(product);
@@ -177,6 +182,26 @@ export default function CreateProductModal({
                   />
                 </label>
               </div>
+
+              {isFactusActive && (
+                <label className="block" htmlFor="productTax">
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-black/40">
+                    Impuesto (DIAN)
+                  </span>
+                  <select
+                    id="productTax"
+                    value={taxPreset}
+                    onChange={(e) => setTaxPreset(e.target.value as TaxPresetValue)}
+                    className="h-12 w-full rounded-xl border border-black/10 bg-black/[0.02] px-4 text-sm outline-none focus:border-black/30"
+                  >
+                    {TAX_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <button
                 type="submit"
