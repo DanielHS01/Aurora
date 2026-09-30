@@ -15,6 +15,7 @@ import {
   updateProductOptionValue,
   deleteProductOptionValue,
 } from '@/lib/queries/menu'
+import { TAX_PRESETS, type TaxPresetValue } from '@/lib/constants/taxPresets'
 import { revalidatePath } from 'next/cache'
 
 // ============================================================================
@@ -71,6 +72,16 @@ export async function deactivateMenuCategoryAction(categoryId: string, businessI
 // PRODUCTOS
 // ============================================================================
 
+function resolveTaxPreset(formData: FormData) {
+  const preset = (formData.get('taxPreset') as TaxPresetValue) || ''
+  const found = TAX_PRESETS.find((p) => p.value === preset)
+  return {
+    tax_code: found?.taxCode ?? null,
+    tax_rate: found?.taxRate ?? null,
+    tax_is_excluded: found?.taxIsExcluded ?? false,
+  }
+}
+
 export async function createProductAction(formData: FormData) {
   const businessId = formData.get('businessId') as string
   const categoryId = (formData.get('categoryId') as string) || null
@@ -90,6 +101,8 @@ export async function createProductAction(formData: FormData) {
     throw new Error('El precio debe ser un número válido mayor o igual a 0')
   }
 
+  const { tax_code, tax_rate, tax_is_excluded } = resolveTaxPreset(formData)
+
   const product = await createProduct({
     business_id: businessId,
     category_id: categoryId,
@@ -97,6 +110,9 @@ export async function createProductAction(formData: FormData) {
     description,
     price,
     preparation_time_minutes: preparationTime,
+    tax_code,
+    tax_rate,
+    tax_is_excluded,
   })
 
   revalidatePath('/dashboard/menu')
@@ -122,7 +138,19 @@ export async function updateProductAction(
     throw new Error('El precio debe ser un número válido mayor o igual a 0')
   }
 
-  await updateProduct(productId, { name, description, price, category_id: categoryId })
+  // El preset de impuesto solo se toca si el formulario lo incluyó
+  // (formulario del Plan Básico, sin Factus activo, no manda este
+  // campo en absoluto — así no se sobreescribe nada por accidente).
+  const hasTaxPreset = formData.has('taxPreset')
+  const taxFields = hasTaxPreset ? resolveTaxPreset(formData) : {}
+
+  await updateProduct(productId, {
+    name,
+    description,
+    price,
+    category_id: categoryId,
+    ...taxFields,
+  })
   revalidatePath('/dashboard/menu')
 }
 

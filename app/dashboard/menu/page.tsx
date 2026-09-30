@@ -1,12 +1,16 @@
 import { getCurrentUserBusiness } from '@/lib/queries/businesses';
 import { getFullMenu } from '@/lib/queries/menu';
+import { getFactusActivationStatus } from '@/lib/queries/factusCredentials';
 import MenuManager from '@/components/dashboard/restaurant/menu/MenuManager';
 
 export default async function MenuPage() {
   const business = await getCurrentUserBusiness();
   if (!business) return null;
 
-  const categories = await getFullMenu(business.id);
+  const [categories, factusStatus] = await Promise.all([
+    getFullMenu(business.id),
+    getFactusActivationStatus(business.id),
+  ]);
 
   return (
     <div>
@@ -17,7 +21,11 @@ export default async function MenuPage() {
         </p>
       </header>
 
-      <MenuManager businessId={business.id} categories={categories} />
+      <MenuManager
+        businessId={business.id}
+        categories={categories}
+        isFactusActive={factusStatus === 'active'}
+      />
     </div>
   );
 }

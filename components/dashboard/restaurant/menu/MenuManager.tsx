@@ -18,11 +18,13 @@ import ProductOptionsModal from './ProductOptionsModal';
 interface MenuManagerProps {
   businessId: string;
   categories: CategoryWithProducts[];
+  isFactusActive: boolean;
 }
 
 export default function MenuManager({
   businessId,
   categories,
+  isFactusActive,
 }: MenuManagerProps) {
   const router = useRouter();
 
@@ -221,6 +223,7 @@ export default function MenuManager({
         <CreateProductModal
           businessId={businessId}
           categoryId={createProductForCategoryId}
+          isFactusActive={isFactusActive}
           onClose={() => setCreateProductForCategoryId(null)}
         />
       )}
@@ -246,6 +249,7 @@ export default function MenuManager({
           businessId={businessId}
           product={editingProduct}
           categories={categories}
+          isFactusActive={isFactusActive}
           onClose={() => setEditingProductId(null)}
         />
       )}

@@ -11,9 +11,11 @@ import {
   FiChevronRight,
   FiX,
   FiPrinter,
+  FiExternalLink,
+  FiShield,
 } from "react-icons/fi";
 
-import { getInvoiceDetailAction } from "@/lib/actions/payment-actions";
+import { getInvoiceDetailAction, cancelInvoiceAction } from "@/lib/actions/payment-actions";
 import type {
   InvoiceWithDetails,
   InvoiceWithItems,
@@ -41,23 +43,39 @@ const SORT_OPTIONS: { value: InvoiceSortOption; label: string }[] = [
   { value: "total_asc", label: "Total (menor a mayor)" },
 ];
 
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  return d.toLocaleString("es-CO", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const DOCUMENT_TYPE_OPTIONS: { value: "" | "electronic" | "local"; label: string }[] = [
+  { value: "", label: "Todos los documentos" },
+  { value: "electronic", label: "Solo electrónicas (DIAN)" },
+  { value: "local", label: "Solo locales" },
+];
 
-function StatusBadge({ status }: { status: string | null }) {
+function StatusBadge({
+  status,
+  hasCufe,
+}: {
+  status: string | null;
+  hasCufe: boolean;
+}) {
   const normalized = (status ?? "").toLowerCase();
 
-  if (normalized === "issued" || normalized === "paid") {
+  if (normalized === "cancelled" || normalized === "void") {
     return (
+      <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">
+        Anulada
+      </span>
+    );
+  }
+
+  if (normalized === "issued" || normalized === "paid") {
+    // Distinguimos visualmente el documento oficial DIAN del
+    // comprobante local — mismo verde de "éxito", pero con ícono y
+    // texto distintos, para que el cajero sepa cuál está viendo.
+    return hasCufe ? (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+        <FiShield size={13} />
+        DIAN
+      </span>
+    ) : (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
         <FiCheckCircle size={13} />
         Emitida
@@ -65,10 +83,10 @@ function StatusBadge({ status }: { status: string | null }) {
     );
   }
 
-  if (normalized === "cancelled" || normalized === "void") {
+  if (normalized === "pending_validation") {
     return (
-      <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">
-        Anulada
+      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+        Validando ante DIAN
       </span>
     );
   }
@@ -89,6 +107,7 @@ interface InvoicesTableProps {
   currentSearch: string;
   currentOrderType: OrderType | undefined;
   currentSort: InvoiceSortOption;
+  currentDocumentType: "" | "electronic" | "local";
 }
 
 export default function InvoicesTable({
@@ -100,6 +119,7 @@ export default function InvoicesTable({
   currentSearch,
   currentOrderType,
   currentSort,
+  currentDocumentType,
 }: InvoicesTableProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -119,6 +139,7 @@ export default function InvoicesTable({
   const hasActiveFilters =
     Boolean(currentSearch) ||
     Boolean(currentOrderType) ||
+    Boolean(currentDocumentType) ||
     currentSort !== DEFAULT_SORT ||
     page > 1;
 
@@ -168,6 +189,20 @@ export default function InvoicesTable({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={currentDocumentType}
+            onChange={(e) =>
+              updateParams({ doc: e.target.value || undefined })
+            }
+            className="h-11 rounded-xl border border-black/10 bg-white px-3 text-sm outline-none focus:border-black/30"
+          >
+            {DOCUMENT_TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
           <select
             value={currentOrderType ?? ""}
             onChange={(e) =>
@@ -226,8 +261,11 @@ export default function InvoicesTable({
         </div>
       ) : (
         <>
+          {/* overflow-x-auto + min-w en la tabla: en pantallas angostas
+              se desliza horizontal en vez de romper el layout — mismo
+              patrón responsive que ya usaba el resto del dashboard. */}
           <div className="overflow-x-auto rounded-2xl border border-black/10">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[960px] text-left text-sm">
               <thead className="bg-black/[0.02] text-xs uppercase tracking-wide text-black/40">
                 <tr>
                   <th className="px-4 py-3">Factura</th>
@@ -240,68 +278,88 @@ export default function InvoicesTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {invoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">
-                        #{invoice.invoice_number ?? invoice.id.slice(0, 8)}
-                      </p>
-                      <p className="text-xs text-black/40">
-                        {formatDateTimeCO(
-                          invoice.issued_at ?? invoice.created_at,
+                {invoices.map((invoice) => {
+                  const hasCufe = Boolean(invoice.cufe);
+                  return (
+                    <tr key={invoice.id}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium">
+                          #{invoice.invoice_number ?? invoice.id.slice(0, 8)}
+                        </p>
+                        {hasCufe && (
+                          <p className="text-xs text-emerald-700">
+                            DIAN: {invoice.factus_number}
+                          </p>
                         )}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-black/60">
-                      {invoice.order
-                        ? (ORDER_TYPE_LABEL[invoice.order.order_type] ??
-                          invoice.order.order_type)
-                        : "—"}
-                      {invoice.order?.table?.table_number && (
-                        <span className="ml-1 text-xs text-black/40">
-                          · Mesa {invoice.order.table.table_number}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {invoice.customer?.full_name ?? "Cliente sin registrar"}
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      ${(invoice.total ?? 0).toLocaleString("es-CO")}
-                    </td>
-                    <td className="max-w-[180px] truncate px-4 py-3 text-black/50">
-                      {invoice.order?.notes || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={invoice.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedInvoiceId(invoice.id)}
-                          aria-label="Ver factura"
-                          className="rounded-lg p-2 text-black/50 hover:bg-black/5 hover:text-black"
-                        >
-                          <FiEye size={15} />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setPreviewInvoice({
-                              id: invoice.id,
-                              number:
-                                invoice.invoice_number ??
-                                invoice.id.slice(0, 8),
-                            })
-                          }
-                          aria-label="Ver e imprimir factura"
-                          className="rounded-lg p-2 text-black/50 hover:bg-black/5 hover:text-black"
-                        >
-                          <FiPrinter size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        <p className="text-xs text-black/40">
+                          {formatDateTimeCO(
+                            invoice.issued_at ?? invoice.created_at,
+                          )}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-black/60">
+                        {invoice.order
+                          ? (ORDER_TYPE_LABEL[invoice.order.order_type] ??
+                            invoice.order.order_type)
+                          : "—"}
+                        {invoice.order?.table?.table_number && (
+                          <span className="ml-1 text-xs text-black/40">
+                            · Mesa {invoice.order.table.table_number}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {invoice.customer?.full_name ?? "Cliente sin registrar"}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        ${(invoice.total ?? 0).toLocaleString("es-CO")}
+                      </td>
+                      <td className="max-w-[180px] truncate px-4 py-3 text-black/50">
+                        {invoice.order?.notes || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={invoice.status} hasCufe={hasCufe} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedInvoiceId(invoice.id)}
+                            aria-label="Ver factura"
+                            className="rounded-lg p-2 text-black/50 hover:bg-black/5 hover:text-black"
+                          >
+                            <FiEye size={15} />
+                          </button>
+                          {hasCufe && invoice.public_url ? (
+                            <a
+                              href={invoice.public_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="Ver documento oficial DIAN"
+                              className="rounded-lg p-2 text-black/50 hover:bg-black/5 hover:text-black"
+                            >
+                              <FiExternalLink size={15} />
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                setPreviewInvoice({
+                                  id: invoice.id,
+                                  number:
+                                    invoice.invoice_number ??
+                                    invoice.id.slice(0, 8),
+                                })
+                              }
+                              aria-label="Ver e imprimir factura"
+                              className="rounded-lg p-2 text-black/50 hover:bg-black/5 hover:text-black"
+                            >
+                              <FiPrinter size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -363,9 +421,33 @@ function InvoiceDetailModal({
   invoiceId: string;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [invoice, setInvoice] = useState<InvoiceWithItems | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelResult, setCancelResult] = useState<{ creditNoteNumber: string; publicUrl: string } | null>(null);
+
+  async function handleCancelInvoice() {
+    if (!cancelReason.trim()) {
+      setCancelError("Indica el motivo de la anulación.");
+      return;
+    }
+    setCancelling(true);
+    setCancelError("");
+    try {
+      const result = await cancelInvoiceAction(invoiceId, businessId, cancelReason);
+      setCancelResult({ creditNoteNumber: result.creditNoteNumber, publicUrl: result.publicUrl });
+      router.refresh();
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Ocurrió un error.");
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -393,6 +475,8 @@ function InvoiceDetailModal({
     };
   }, [invoiceId, businessId]);
 
+  const hasCufe = Boolean(invoice?.cufe);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -416,11 +500,22 @@ function InvoiceDetailModal({
               <h3 className="text-lg font-semibold">
                 Factura #{invoice.invoice_number ?? invoice.id.slice(0, 8)}
               </h3>
-              <StatusBadge status={invoice.status} />
+              <StatusBadge status={invoice.status} hasCufe={hasCufe} />
             </div>
             <p className="mb-5 text-xs text-black/40">
               {formatDateTimeCO(invoice.issued_at ?? invoice.created_at)}
             </p>
+
+            {hasCufe && (
+              <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                <p className="text-xs uppercase tracking-wide text-emerald-700">
+                  Documento electrónico DIAN
+                </p>
+                <p className="mt-1 break-all font-mono text-[11px] text-black/50">
+                  CUFE: {invoice.cufe}
+                </p>
+              </div>
+            )}
 
             <ul className="space-y-2">
               {invoice.items.map((item) => (
@@ -452,14 +547,79 @@ function InvoiceDetailModal({
               </div>
             </div>
 
-            <button
-              disabled
-              title="Disponible próximamente"
-              className="mt-6 flex h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-medium text-black/30"
-            >
-              <FiDownload size={15} />
-              Descargar PDF
-            </button>
+            {hasCufe && invoice.public_url ? (
+              <a
+                href={invoice.public_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-medium text-black/70 hover:bg-black/5"
+              >
+                <FiExternalLink size={15} />
+                Ver documento oficial DIAN
+              </a>
+            ) : (
+              <button
+                disabled
+                title="Disponible próximamente"
+                className="mt-6 flex h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-black/10 text-sm font-medium text-black/30"
+              >
+                <FiDownload size={15} />
+                Descargar PDF
+              </button>
+            )}
+
+            {hasCufe && invoice.status !== "cancelled" && (
+              <div className="mt-3">
+                {cancelResult ? (
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 text-center text-sm text-emerald-700">
+                    Factura anulada — Nota Crédito {cancelResult.creditNoteNumber}.{" "}
+                    <a
+                      href={cancelResult.publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      Ver documento
+                    </a>
+                  </div>
+                ) : showCancelForm ? (
+                  <div className="rounded-xl border border-red-100 bg-red-50/50 p-3">
+                    {cancelError && (
+                      <p className="mb-2 text-xs text-red-600">{cancelError}</p>
+                    )}
+                    <textarea
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="Motivo de la anulación (obligatorio)"
+                      rows={2}
+                      className="mb-2 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-black/30"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowCancelForm(false)}
+                        className="h-9 flex-1 rounded-lg border border-black/10 text-xs font-medium text-black/60"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleCancelInvoice}
+                        disabled={cancelling}
+                        className="h-9 flex-1 rounded-lg bg-red-600 text-xs font-medium text-white disabled:opacity-60"
+                      >
+                        {cancelling ? "Anulando..." : "Confirmar anulación"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowCancelForm(true)}
+                    className="flex h-10 w-full items-center justify-center text-xs font-medium text-red-600 hover:underline"
+                  >
+                    Anular esta factura
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
 
