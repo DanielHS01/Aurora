@@ -22,13 +22,14 @@ const ROLES_THAT_MANAGE_USERS: BusinessRole[] = ['owner', 'admin']
  * Protegido por RLS normalmente (el usuario ya tiene acceso confirmado).
  */
 export async function getBusinessUsers(businessId: string): Promise<BusinessMember[]> {
-  const supabase = await createClient()
+  const supabase = await createAdminClient()
 
   const { data, error } = await supabase
     .from('business_users')
     .select('*, profile:profiles(*)')
     .eq('business_id', businessId)
-    .eq('is_active', true)
+    .order('is_active', { ascending: false }) // activos primero, inactivos al final
+    .order('created_at', { ascending: true })
 
   if (error || !data) return []
   return data as BusinessMember[]
@@ -259,5 +260,21 @@ export async function completeInvitedBusinessUser(
   if (error || !data) {
     throw new Error(`Error vinculando usuario al negocio: ${error?.message}`)
   }
+  return data
+}
+/**
+ * A diferencia de getCurrentUserBusiness (que solo encuentra negocios
+ * ACTIVOS), esta busca sin importar is_active — sirve para distinguir
+ * "nunca tuvo negocio" de "tenía uno, pero fue desactivado".
+ */
+export async function getAnyBusinessMembership(userId: string) {
+  const supabase = createAdminClient()
+
+  const { data } = await supabase
+    .from('business_users')
+    .select('business_id, is_active')
+    .eq('user_id', userId)
+    .maybeSingle()
+
   return data
 }

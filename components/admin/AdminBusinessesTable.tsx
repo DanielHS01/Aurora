@@ -1,43 +1,44 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import ManageFactusCredentialsModal from './ManageFactusCredentialsModal';
+import { useState } from "react";
+import ManageFactusCredentialsModal from "./ManageFactusCredentialsModal";
 
 const STATUS_LABEL: Record<string, string> = {
-  trial: 'Prueba',
-  active: 'Al día',
-  past_due: 'En mora',
-  cancelled: 'Cancelado',
-  expired: 'Expirado',
+  trial: "Prueba",
+  active: "Al día",
+  past_due: "En mora",
+  cancelled: "Cancelado",
+  expired: "Expirado",
 };
 
 const STATUS_CLASS: Record<string, string> = {
-  trial: 'bg-blue-50 text-blue-700',
-  active: 'bg-emerald-50 text-emerald-700',
-  past_due: 'bg-red-50 text-red-600',
-  cancelled: 'bg-black/5 text-black/40',
-  expired: 'bg-black/5 text-black/40',
+  trial: "bg-blue-50 text-blue-700",
+  active: "bg-emerald-50 text-emerald-700",
+  past_due: "bg-red-50 text-red-600",
+  cancelled: "bg-black/5 text-black/40",
+  expired: "bg-black/5 text-black/40",
 };
 
 const FACTUS_LABEL: Record<string, string> = {
-  pending_activation: 'Pendiente',
-  active: 'Activa',
-  suspended: 'Suspendida',
+  pending_activation: "Pendiente",
+  active: "Activa",
+  suspended: "Suspendida",
 };
 
 const FACTUS_CLASS: Record<string, string> = {
-  pending_activation: 'bg-amber-50 text-amber-700',
-  active: 'bg-emerald-50 text-emerald-700',
-  suspended: 'bg-red-50 text-red-600',
+  pending_activation: "bg-amber-50 text-amber-700",
+  active: "bg-emerald-50 text-emerald-700",
+  suspended: "bg-red-50 text-red-600",
 };
 
 type BusinessRow = {
   id: string;
   name: string;
   business_type: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
   subscriptionStatus: string | null;
-  daysUntilRenewal: number | null;
+  lockState: 'ok' | 'grace' | 'locked' | null;
+  daysInfo: string;
 };
 
 interface AdminBusinessesTableProps {
@@ -49,7 +50,8 @@ export default function AdminBusinessesTable({
   businesses,
   factusStatusMap,
 }: AdminBusinessesTableProps) {
-  const [managingFactusFor, setManagingFactusFor] = useState<BusinessRow | null>(null);
+  const [managingFactusFor, setManagingFactusFor] =
+    useState<BusinessRow | null>(null);
 
   return (
     <>
@@ -73,40 +75,49 @@ export default function AdminBusinessesTable({
                 <tr key={b.id}>
                   <td className="px-4 py-3 font-medium">{b.name}</td>
                   <td className="px-4 py-3 text-black/50 capitalize">
-                    {b.business_type ?? '—'}
+                    {b.business_type ?? "—"}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs ${
-                        b.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                        b.is_active
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : "bg-red-500/10 text-red-400"
                       }`}
                     >
-                      {b.is_active ? 'Activo' : 'Inactivo'}
+                      {b.is_active ? "Activo" : "Inactivo"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs ${
-                        STATUS_CLASS[b.subscriptionStatus ?? ''] ?? 'bg-black/5 text-black/40'
+                        STATUS_CLASS[b.subscriptionStatus ?? ""] ??
+                        "bg-black/5 text-black/40"
                       }`}
                     >
-                      {STATUS_LABEL[b.subscriptionStatus ?? ''] ?? 'Sin plan'}
+                      {STATUS_LABEL[b.subscriptionStatus ?? ""] ?? "Sin plan"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-black/50">
-                    {b.daysUntilRenewal === null
-                      ? '—'
-                      : b.daysUntilRenewal < 0
-                      ? `Vencido hace ${Math.abs(b.daysUntilRenewal)} días`
-                      : `En ${b.daysUntilRenewal} días`}
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        b.lockState === "locked"
+                          ? "text-red-600 font-medium"
+                          : b.lockState === "grace"
+                            ? "text-amber-600"
+                            : "text-black/50"
+                      }
+                    >
+                      {b.daysInfo}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs ${
-                        FACTUS_CLASS[factusStatus] ?? 'bg-black/5 text-black/40'
+                        FACTUS_CLASS[factusStatus] ?? "bg-black/5 text-black/40"
                       }`}
                     >
-                      {FACTUS_LABEL[factusStatus] ?? 'Sin activar'}
+                      {FACTUS_LABEL[factusStatus] ?? "Sin activar"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">

@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, useMotionValue, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 
-import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowRight, FiGrid } from "react-icons/fi";
+import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowRight } from "react-icons/fi";
 
 import { signInAction } from "@/lib/actions/auth-actions";
+
+const labelClass = "mb-2 block text-sm font-medium text-zinc-300";
+const inputClass =
+  "h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 pl-10 pr-4 text-sm text-zinc-50 shadow-sm placeholder:text-zinc-600 outline-none transition focus:border-zinc-600 focus:ring-[3px] focus:ring-zinc-50/10";
+const iconClass =
+  "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500";
+const eyeButtonClass =
+  "absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-zinc-400 transition hover:text-zinc-200";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -19,17 +27,6 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-250, 250], [7, -7]);
-  const rotateY = useTransform(mouseX, [-250, 250], [-7, 7]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mouseX.set(e.clientX - rect.left - rect.width / 2);
-    mouseY.set(e.clientY - rect.top - rect.height / 2);
-  };
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -59,51 +56,38 @@ export default function LoginForm() {
 
   return (
     <motion.div
-      className="mx-auto w-full max-w-sm"
-      style={{ perspective: 1400 }}
-      initial={{ opacity: 0, y: 35 }}
+      className="w-full max-w-sm"
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.8 }}
+      transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 0.61, 0.36, 1] }}
     >
-      <motion.div
-        style={{ rotateX, rotateY }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => {
-          mouseX.set(0);
-          mouseY.set(0);
-        }}
-        className="group relative"
-      >
-        <div className="absolute -inset-px rounded-[2rem] bg-gradient-to-r from-white/5 via-white/20 to-white/5 opacity-60 blur-sm" />
-
-        <div className="absolute -inset-px overflow-hidden rounded-[2rem]">
-          <motion.div
-            className="absolute left-[-40%] top-0 h-px w-[40%] bg-gradient-to-r from-transparent via-white to-transparent"
-            animate={{ left: ["-40%", "110%"] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 1, ease: "easeInOut" }}
-          />
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-zinc-900/60">
+        <div className="space-y-1 p-6 pb-5">
+          <h2 className="text-2xl font-semibold tracking-tight">Bienvenida</h2>
+          <p className="text-sm text-zinc-400">
+            Accede a tu dashboard Aurora y gestiona atención, reservas,
+            pedidos, pagos y analítica en tiempo real.
+          </p>
         </div>
 
-        <div className="relative rounded-[2rem] border border-white/10 bg-black/55 p-7 shadow-2xl backdrop-blur-2xl">
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white text-black">
-              <FiGrid size={21} />
-            </div>
-            <h2 className="text-3xl font-medium uppercase tracking-[-0.06em]">Bienvenida</h2>
-            <p className="mt-2 text-sm text-white/45">Accede a tu dashboard Aurora.</p>
-          </div>
-
+        <div className="p-6 pt-0">
           {error && (
-            <div role="alert" className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div
+              role="alert"
+              className="mb-5 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+            >
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <label className="block" htmlFor="email">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Email</span>
+          <form onSubmit={handleSubmit} className="grid gap-5" noValidate>
+            {/* Email */}
+            <div>
+              <label htmlFor="email" className={labelClass}>
+                Email
+              </label>
               <div className="relative">
-                <FiMail className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiMail className={iconClass} />
                 <input
                   id="email"
                   type="email"
@@ -112,15 +96,18 @@ export default function LoginForm() {
                   placeholder="tu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/25 focus:bg-white/[0.09]"
+                  className={inputClass}
                 />
               </div>
-            </label>
+            </div>
 
-            <label className="block" htmlFor="password">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Contraseña</span>
+            {/* Contraseña */}
+            <div>
+              <label htmlFor="password" className={labelClass}>
+                Contraseña
+              </label>
               <div className="relative">
-                <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiLock className={iconClass} />
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
@@ -129,21 +116,28 @@ export default function LoginForm() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/25 focus:bg-white/[0.09]"
+                  className={`${inputClass} pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white"
+                  className={eyeButtonClass}
                 >
-                  {showPassword ? <FiEyeOff /> : <FiEye />}
+                  {showPassword ? (
+                    <FiEyeOff className="h-4 w-4" />
+                  ) : (
+                    <FiEye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
-            </label>
+            </div>
 
-            <div className="flex justify-end pt-1 text-xs text-white/45">
-              <Link href="/reset-password" className="transition hover:text-white">
+            <div className="flex justify-end text-sm">
+              <Link
+                href="/reset-password"
+                className="text-zinc-300 transition hover:text-zinc-100"
+              >
                 Recuperar acceso
               </Link>
             </div>
@@ -151,21 +145,21 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="group mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-medium uppercase text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
+              className="group flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-zinc-50 text-sm font-medium text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? "Entrando..." : "Acceder"}
               <FiArrowRight className="transition group-hover:translate-x-1" />
             </button>
           </form>
-
-          <p className="mt-6 text-center text-xs text-white/40">
-            ¿Aún no tienes cuenta?{" "}
-            <Link href="/register" className="text-white hover:underline">
-              Empieza gratis por 14 días
-            </Link>
-          </p>
         </div>
-      </motion.div>
+
+        <div className="flex justify-center border-t border-zinc-800/80 p-5 text-sm text-zinc-400">
+          ¿Aún no tienes cuenta?
+          <Link href="/register" className="ml-1 text-zinc-200 hover:underline">
+            Empieza gratis por 14 días
+          </Link>
+        </div>
+      </div>
     </motion.div>
   );
 }

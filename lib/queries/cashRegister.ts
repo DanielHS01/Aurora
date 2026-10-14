@@ -13,7 +13,12 @@ export type CashRegisterSession = {
   counted_cash: number | null
   notes: string | null
 }
-
+export async function assertCashRegisterOpen(businessId: string): Promise<void> {
+  const openSession = await getOpenCashSession(businessId)
+  if (!openSession) {
+    throw new Error('No puedes tomar pedidos con la caja cerrada. Abre la caja primero desde la sección "Caja".')
+  }
+}
 export async function getOpenCashSession(businessId: string): Promise<CashRegisterSession | null> {
   const supabase = await createClient()
 

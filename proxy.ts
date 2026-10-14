@@ -11,6 +11,16 @@ const PUBLIC_ROUTES = [
   "/update-password",
   "/maintenance",
   "/subscription-locked",
+  "/account-disabled",
+  "/legal/terminos",
+  "/legal/privacidad",
+  "/legal/cookies",
+  "/legal/confidencialidad",
+  "/legal/auditorias-cumplimiento-fiscal",
+  "/legal/sla",
+  "/legal/reembolsos-cancelaciones",
+  "/legal/politica-ia",
+  "/legal/dpa",
 ];
 
 // Rutas exentas del bloqueo por mora — el negocio SIEMPRE debe poder
