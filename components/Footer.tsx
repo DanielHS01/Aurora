@@ -1,11 +1,33 @@
 "use client";
 
+import Link from "next/link";
 import {
   FiInstagram,
   FiLinkedin,
   FiYoutube,
   FiArrowUpRight,
 } from "react-icons/fi";
+
+const LEGAL_LINKS = [
+  { href: "/legal/confidencialidad", label: "Confidencialidad" },
+  {
+    href: "/legal/auditorias-cumplimiento-fiscal",
+    label: "Auditorías y cumplimiento fiscal",
+  },
+  { href: "/legal/sla", label: "SLA" },
+  {
+    href: "/legal/reembolsos-cancelaciones",
+    label: "Reembolsos y cancelaciones",
+  },
+  { href: "/legal/politica-ia", label: "Política de IA" },
+  { href: "/legal/dpa", label: "DPA" },
+];
+
+const BOTTOM_LINKS = [
+  { href: "/legal/privacidad", label: "Privacidad" },
+  { href: "/legal/terminos", label: "Términos" },
+  { href: "/legal/cookies", label: "Cookies" },
+];
 
 export default function Footer() {
   return (
@@ -15,13 +37,13 @@ export default function Footer() {
       <div className="pointer-events-none absolute top-0 left-1/2 h-[300px] w-[700px] -translate-x-1/2 rounded-full bg-white/[0.03] blur-[140px]" />
 
       <div className="mx-auto max-w-7xl px-6 py-24">
-        <div className="grid gap-16 lg:grid-cols-[1.5fr_1fr_1fr]">
+        <div className="grid gap-14 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:gap-12">
           {/* Marca */}
-          <div>
-            <div className="pointer-events-none absolute bottom-[-120px] left-1/2 -translate-x-1/2 text-[18rem] font-medium uppercase tracking-[-0.08em] text-white/[0.02]">
+          <div className="md:col-span-2 lg:col-span-1">
+            <div className="pointer-events-none absolute bottom-[-120px] left-1/2 -translate-x-1/2 text-[18rem] font-black uppercase tracking-[-0.08em] text-white/[0.02]">
               AURORA
             </div>
-            <h2 className="text-7xl font-medium uppercase tracking-[-0.08em] md:text-8xl">
+            <h2 className="text-7xl font-black uppercase tracking-[-0.08em] md:text-8xl">
               AURORA
             </h2>
 
@@ -65,6 +87,25 @@ export default function Footer() {
             </div>
           </div>
 
+          {/* Legal */}
+          <div>
+            <p className="mb-6 text-xs uppercase tracking-[0.3em] text-white/35">
+              Legal
+            </p>
+
+            <div className="flex flex-col gap-4 text-base">
+              {LEGAL_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-white/60 transition hover:text-white"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
           {/* Social */}
           <div>
             <p className="mb-6 text-xs uppercase tracking-[0.3em] text-white/35">
@@ -73,7 +114,7 @@ export default function Footer() {
 
             <div className="flex gap-4">
               <a
-                href="#"
+                href="https://www.instagram.com/aurora_pos?stkn=ZW51YXJoZzJrYTJp"
                 className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] text-white/60 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
               >
                 <FiInstagram size={20} />
@@ -100,17 +141,15 @@ export default function Footer() {
           <p>© 2026 Aurora. Todos los derechos reservados.</p>
 
           <div className="flex gap-6">
-            <a href="#" className="hover:text-white">
-              Privacidad
-            </a>
-
-            <a href="#" className="hover:text-white">
-              Términos
-            </a>
-
-            <a href="#" className="hover:text-white">
-              Cookies
-            </a>
+            {BOTTOM_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="transition hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
       </div>

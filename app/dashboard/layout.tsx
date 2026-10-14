@@ -10,15 +10,28 @@ import MaintenanceBanner from '@/components/dashboard/MaintenanceBanner';
 import { isPlatformAdmin } from '@/lib/auth/platform';
 import { getSubscriptionWithPlan } from '@/lib/queries/subscriptionBilling';
 import TrialBanner from '@/components/dashboard/TrialBanner';
+import GracePeriodBanner from '@/components/dashboard/GracePeriodBanner';
+import { getCurrentUser } from '@/lib/auth/session';
+import { getAnyBusinessMembership } from '@/lib/queries/business-users';
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  
   const business = await getCurrentUserBusiness();
 
   if (!business) {
+    const user = await getCurrentUser();
+    const membership = user ? await getAnyBusinessMembership(user.id) : null;
+
+    // Tenía un negocio, pero fue desactivado — no es un caso de
+    // "nunca terminó su registro", es acceso revocado explícitamente.
+    if (membership && !membership.is_active) {
+      redirect('/account-disabled');
+    }
+
     redirect('/setup-business');
   }
 
@@ -30,6 +43,7 @@ export default async function DashboardLayout({
   getSubscriptionWithPlan(business.id),
 ]);
   const trialDaysLeft = subscription?.status === 'trial' ? subscription.daysLeft : null;
+  const graceDaysLeft = subscription?.graceDaysLeft ?? null;
     
   return (
     <ToastProvider>
@@ -44,6 +58,7 @@ export default async function DashboardLayout({
       >
         <MaintenanceBanner announcement={maintenanceAnnouncement} />
         <TrialBanner status={subscription?.status ?? null} daysLeft={trialDaysLeft} />
+        <GracePeriodBanner graceDaysLeft={graceDaysLeft} />
         
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <Sidebar

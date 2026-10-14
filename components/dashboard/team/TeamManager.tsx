@@ -53,8 +53,8 @@ export default function TeamManager({ businessId, members }: TeamManagerProps) {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-black/10">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-black/10">
+        <table className="w-full min-w-[600px] text-left text-sm">
           <thead className="bg-black/[0.02] text-xs uppercase tracking-wide text-black/40">
             <tr>
               <th className="px-4 py-3">Nombre</th>
@@ -138,7 +138,7 @@ function MemberRow({ member }: { member: BusinessMember }) {
           <button
             onClick={handleToggleActive}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-xs text-black/60 hover:bg-black/5 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-xs text-black/60 hover:bg-black/5 disabled:opacity-50"
           >
             {member.is_active ? (
               <>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { motion, useMotionValue, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 
 import {
   FiUser,
@@ -20,12 +20,20 @@ import {
 import { signUpAction } from "@/lib/actions/auth-actions";
 
 const BUSINESS_TYPES = [
-  { value: "restaurant", label: "Restaurante" },
-  { value: 'barbershop', label: "Barbería" },
-  { value: "optical", label: "Óptica" },
+  { value: "restaurant", label: "Restaurante", enabled: true },
+  { value: "barber shop", label: "Barbería (próximamente)", enabled: false },
+  { value: "optical", label: "Óptica (próximamente)", enabled: false },
 ] as const;
 
 type BusinessType = (typeof BUSINESS_TYPES)[number]["value"];
+
+const labelClass = "mb-2 block text-sm font-medium text-zinc-300";
+const inputClass =
+  "h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 pl-10 pr-4 text-sm text-zinc-50 shadow-sm placeholder:text-zinc-600 outline-none transition focus:border-zinc-600 focus:ring-[3px] focus:ring-zinc-50/10";
+const iconClass =
+  "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500";
+const eyeButtonClass =
+  "absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-zinc-400 transition hover:text-zinc-200";
 
 export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
@@ -38,20 +46,10 @@ export default function RegisterForm() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState<BusinessType | "">("");
+  const [businessType, setBusinessType] = useState<BusinessType | "">("restaurant");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-250, 250], [7, -7]);
-  const rotateY = useTransform(mouseX, [-250, 250], [-7, 7]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mouseX.set(e.clientX - rect.left - rect.width / 2);
-    mouseY.set(e.clientY - rect.top - rect.height / 2);
-  };
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -69,6 +67,11 @@ export default function RegisterForm() {
 
     if (password !== confirmPassword) {
       setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError("Debes aceptar los Términos y la Política de Privacidad para continuar.");
       return;
     }
 
@@ -97,29 +100,29 @@ export default function RegisterForm() {
   if (registered) {
     return (
       <motion.div
-        className="mx-auto w-full max-w-sm"
+        className="w-full max-w-sm"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <div className="rounded-[2rem] border border-white/10 bg-black/55 p-8 text-center shadow-2xl backdrop-blur-2xl">
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white text-black">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-8 text-center shadow-sm backdrop-blur supports-[backdrop-filter]:bg-zinc-900/60">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-50 text-zinc-900">
             <FiCheckCircle size={21} />
           </div>
 
-          <h2 className="text-2xl font-medium uppercase tracking-[-0.06em]">
+          <h2 className="text-2xl font-semibold tracking-tight">
             Revisa tu correo
           </h2>
 
-          <p className="mt-3 text-sm text-white/50">
+          <p className="mt-3 text-sm text-zinc-400">
             Te enviamos un enlace de confirmación a{" "}
-            <span className="text-white">{email}</span>. Tu workspace se
+            <span className="text-zinc-50">{email}</span>. Tu workspace se
             creará en cuanto confirmes la cuenta.
           </p>
 
           <Link
             href="/login"
-            className="mt-6 inline-flex items-center gap-2 text-sm text-white hover:underline"
+            className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-200 hover:underline"
           >
             Ir a iniciar sesión <FiArrowRight />
           </Link>
@@ -130,218 +133,246 @@ export default function RegisterForm() {
 
   return (
     <motion.div
-      className="mx-auto w-full max-w-sm"
-      style={{ perspective: 1400 }}
-      initial={{ opacity: 0, y: 35 }}
+      className="w-full max-w-3xl"
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.8 }}
+      transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 0.61, 0.36, 1] }}
     >
-      <motion.div
-        style={{ rotateX, rotateY }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => {
-          mouseX.set(0);
-          mouseY.set(0);
-        }}
-        className="group relative"
-      >
-        <div className="absolute -inset-px rounded-[2rem] bg-gradient-to-r from-white/5 via-white/20 to-white/5 opacity-60 blur-sm" />
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-zinc-900/60">
+        <div className="space-y-1 p-6 pb-5 sm:px-8 sm:pt-8">
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Crear Workspace
+          </h2>
+          <p className="text-sm text-zinc-400">
+            Tu empresa, tu dashboard y todas las herramientas de Aurora en un
+            solo lugar.
+          </p>
+        </div>
 
-        <div className="relative rounded-[2rem] border border-white/10 bg-black/55 p-7 shadow-2xl backdrop-blur-2xl">
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white text-black">
-              <FiGrid size={21} />
-            </div>
-
-            <h2 className="text-3xl font-medium uppercase tracking-[-0.06em]">
-              Crear Workspace
-            </h2>
-
-            <p className="mt-2 text-sm text-white/45">
-              Empieza a utilizar Aurora.
-            </p>
-          </div>
-
+        <div className="p-6 pt-0 sm:px-8">
           {error && (
             <div
               role="alert"
-              className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+              className="mb-5 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
             >
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <label className="block" htmlFor="fullName">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+          <form
+            onSubmit={handleSubmit}
+            className="grid gap-5 md:grid-cols-2"
+            noValidate
+          >
+            {/* Nombre */}
+            <div>
+              <label htmlFor="fullName" className={labelClass}>
                 Nombre
-              </span>
+              </label>
               <div className="relative">
-                <FiUser className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiUser className={iconClass} />
                 <input
                   id="fullName"
                   name="fullName"
                   type="text"
                   autoComplete="name"
+                  placeholder="Tu nombre completo"
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none focus:border-white/30"
+                  className={inputClass}
                 />
               </div>
-            </label>
+            </div>
 
-            <label className="block" htmlFor="email">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+            {/* Email */}
+            <div>
+              <label htmlFor="email" className={labelClass}>
                 Email
-              </span>
+              </label>
               <div className="relative">
-                <FiMail className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiMail className={iconClass} />
                 <input
                   id="email"
                   name="email"
                   type="email"
                   autoComplete="email"
+                  placeholder="tu@empresa.com"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none focus:border-white/30"
+                  className={inputClass}
                 />
               </div>
-            </label>
+            </div>
 
-            <label className="block" htmlFor="businessName">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+            {/* Nombre del negocio */}
+            <div>
+              <label htmlFor="businessName" className={labelClass}>
                 Nombre del negocio
-              </span>
+              </label>
               <div className="relative">
-                <FiBriefcase className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiBriefcase className={iconClass} />
                 <input
                   id="businessName"
                   name="businessName"
                   type="text"
                   autoComplete="organization"
+                  placeholder="Mi negocio"
                   required
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-4 text-sm text-white outline-none focus:border-white/30"
+                  className={inputClass}
                 />
               </div>
-            </label>
+            </div>
 
-            <label className="block" htmlFor="businessType">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+            {/* Tipo de negocio */}
+            <div>
+              <label htmlFor="businessType" className={labelClass}>
                 Tipo de negocio
-              </span>
+              </label>
               <div className="relative">
-                <FiGrid className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiGrid className={iconClass} />
                 <select
                   id="businessType"
                   name="businessType"
                   required
                   value={businessType}
-                  onChange={(e) =>
-                    setBusinessType(e.target.value as BusinessType)
-                  }
-                  className="h-12 w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-10 text-sm text-white outline-none focus:border-white/30"
+                  onChange={(e) => setBusinessType(e.target.value as BusinessType)}
+                  className={`${inputClass} appearance-none pr-10`}
                 >
-                  <option value="" disabled className="bg-black text-white/40">
-                    Selecciona una opción
-                  </option>
                   {BUSINESS_TYPES.map((type) => (
                     <option
                       key={type.value}
                       value={type.value}
-                      className="bg-black text-white"
+                      disabled={!type.enabled}
+                      className="bg-zinc-950 text-zinc-50 disabled:text-zinc-600"
                     >
                       {type.label}
                     </option>
                   ))}
                 </select>
-                <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               </div>
-            </label>
+            </div>
 
-            <label className="block" htmlFor="password">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+            {/* Contraseña */}
+            <div>
+              <label htmlFor="password" className={labelClass}>
                 Contraseña
-              </span>
+              </label>
               <div className="relative">
-                <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiLock className={iconClass} />
                 <input
                   id="password"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
+                  placeholder="••••••••"
                   required
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none focus:border-white/30"
+                  className={`${inputClass} pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  aria-label={
-                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                  }
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className={eyeButtonClass}
                 >
-                  {showPassword ? <FiEyeOff /> : <FiEye />}
+                  {showPassword ? (
+                    <FiEyeOff className="h-4 w-4" />
+                  ) : (
+                    <FiEye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
-            </label>
+            </div>
 
-            <label className="block" htmlFor="confirmPassword">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+            {/* Confirmar contraseña */}
+            <div>
+              <label htmlFor="confirmPassword" className={labelClass}>
                 Confirmar contraseña
-              </span>
+              </label>
               <div className="relative">
-                <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/35" />
+                <FiLock className={iconClass} />
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
+                  placeholder="••••••••"
                   required
                   minLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-11 pr-12 text-sm text-white outline-none focus:border-white/30"
+                  className={`${inputClass} pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={
-                    showConfirmPassword
-                      ? "Ocultar contraseña"
-                      : "Mostrar contraseña"
-                  }
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
+                  aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className={eyeButtonClass}
                 >
-                  {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                  {showConfirmPassword ? (
+                    <FiEyeOff className="h-4 w-4" />
+                  ) : (
+                    <FiEye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
+            </div>
+
+            {/* Términos (ancho completo) */}
+            <label className="flex items-start gap-2.5 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-zinc-50"
+              />
+              <span className="text-xs leading-relaxed text-zinc-400">
+                Acepto los{" "}
+                <Link
+                  href="/legal/terminos"
+                  target="_blank"
+                  className="text-zinc-200 underline hover:text-zinc-50"
+                >
+                  Términos y Condiciones
+                </Link>{" "}
+                y la{" "}
+                <Link
+                  href="/legal/privacidad"
+                  target="_blank"
+                  className="text-zinc-200 underline hover:text-zinc-50"
+                >
+                  Política de Privacidad
+                </Link>{" "}
+                de Aurora.
+              </span>
             </label>
 
+            {/* Botón (ancho completo) */}
             <button
               type="submit"
               disabled={loading}
-              className="group flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white text-sm font-medium uppercase text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
+              className="group flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-zinc-50 text-sm font-medium text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2"
             >
               {loading ? "Creando..." : "Crear Workspace"}
               <FiArrowRight className="transition group-hover:translate-x-1" />
             </button>
           </form>
-
-          <p className="mt-6 text-center text-xs text-white/40">
-            ¿Ya tienes una cuenta?{" "}
-            <Link href="/login" className="text-white hover:underline">
-              Iniciar sesión
-            </Link>
-          </p>
         </div>
-      </motion.div>
+
+        <div className="flex justify-center border-t border-zinc-800/80 p-5 text-sm text-zinc-400">
+          ¿Ya tienes una cuenta?
+          <Link href="/login" className="ml-1 text-zinc-200 hover:underline">
+            Iniciar sesión
+          </Link>
+        </div>
+      </div>
     </motion.div>
   );
 }

@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/charge-subscriptions",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/sync-subscription-status",
+      "schedule": "0 6 * * *"
     }
   ]
 }

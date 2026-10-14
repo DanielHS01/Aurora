@@ -14,6 +14,7 @@ import { getKitchenTicketByOrderId, updateKitchenTicketStatus } from '@/lib/quer
 import { updateTableStatus } from '@/lib/queries/tables'
 import type { OrderStatus, OrderType } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import { assertCashRegisterOpen } from '@/lib/queries/cashRegister'
 
 export async function createOrderAction(formData: FormData) {
   const businessId = formData.get('businessId') as string
@@ -22,6 +23,7 @@ export async function createOrderAction(formData: FormData) {
   const orderType = (formData.get('orderType') as OrderType) || 'dine_in'
 
   await requireBusinessAccess(businessId)
+  await assertCashRegisterOpen(businessId)
 
   // Solo evita duplicados si hay mesa — un pedido para llevar sin mesa
   // no tiene "mesa activa" contra la cual comparar, así que este chequeo
