@@ -11,20 +11,25 @@ export default function TakeawayOrderButton({ businessId }: { businessId: string
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.set('businessId', businessId);
-      formData.set('orderType', 'takeaway');
-      // Sin tableId — createOrderAction ya soporta table_id null
+  setLoading(true);
+  try {
+    const formData = new FormData();
+    formData.set('businessId', businessId);
+    formData.set('orderType', 'takeaway');
 
-      const order = await createOrderAction(formData);
-      router.push(`/dashboard/orders/${order.id}`);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ocurrió un error.');
+    const result = await createOrderAction(formData);
+    if (!result.ok) {
+      alert(result.error);
       setLoading(false);
+      return;
     }
+
+    router.push(`/dashboard/orders/${result.data.id}`);
+  } catch {
+    alert('No se pudo completar la acción. Recarga la página e inténtalo de nuevo.');
+    setLoading(false);
   }
+}
 
   return (
     <button

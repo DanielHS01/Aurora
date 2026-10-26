@@ -17,10 +17,26 @@ const iconClass =
 const eyeButtonClass =
   "absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-zinc-400 transition hover:text-zinc-200";
 
+/**
+ * Solo se permiten rutas internas. Sin esto, /login?redirectTo=https://otro-sitio
+ * enviaba al usuario a un sitio externo justo después de iniciar sesión.
+ */
+function safeRedirectPath(value: string | null): string {
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\")
+  ) {
+    return "/dashboard";
+  }
+  return value;
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") ?? "/dashboard";
+  const redirectTo = safeRedirectPath(searchParams.get("redirectTo"));
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,16 +56,20 @@ export default function LoginForm() {
       formData.set("email", email);
       formData.set("password", password);
 
-      // Pasa por el servidor (signInAction) en vez de autenticar desde
-      // el navegador — evita la condición de carrera de cookies que
-      // causaba la expulsión inmediata, y centraliza la validación de
-      // mantenimiento en un solo lugar seguro.
-      await signInAction(formData);
+      // Pasa por el servidor (signInAction) en vez de autenticar desde el
+      // navegador: centraliza la validación de mantenimiento y evita la
+      // condición de carrera de cookies.
+      const result = await signInAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
 
       router.push(redirectTo);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error inesperado.");
+    } catch {
+      setError("No se pudo iniciar sesión. Revisa tu conexión e inténtalo de nuevo.");
       setLoading(false);
     }
   }

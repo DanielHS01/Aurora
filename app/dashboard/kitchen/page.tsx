@@ -14,6 +14,13 @@ export default async function KitchenPage() {
     getFullMenu(business.id),
   ]);
 
+  const categoryByProduct: Record<string, { name: string; order: number }> = {};
+  menu.forEach((category, index) => {
+    category.products.forEach((product) => {
+      categoryByProduct[product.id] = { name: category.name, order: index };
+    });
+  });
+
   return (
     <div>
       <RealtimeOrdersListener businessId={business.id} />
@@ -28,7 +35,11 @@ export default async function KitchenPage() {
         <StockManager businessId={business.id} categories={menu} />
       </header>
 
-      <KitchenBoard businessId={business.id} tickets={tickets} />
+      <KitchenBoard
+        businessId={business.id}
+        tickets={tickets}
+        categoryByProduct={categoryByProduct}
+      />
     </div>
   );
 }

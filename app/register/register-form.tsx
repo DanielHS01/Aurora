@@ -85,13 +85,15 @@ export default function RegisterForm() {
       formData.set("businessName", businessName);
       formData.set("businessType", businessType);
 
-      await signUpAction(formData);
+      const result = await signUpAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
 
       setRegistered(true);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Ocurrió un error inesperado."
-      );
+    } catch {
+      setError("No se pudo completar el registro. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }

@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FiAlertTriangle } from 'react-icons/fi';
 
 import { retryBusinessSetupAction } from '@/lib/actions/auth-actions';
 
 const BUSINESS_TYPES = [
-  { value: 'restaurant', label: 'Restaurante' },
-  { value: 'barber shop', label: 'Barbería' },
-  { value: 'optical', label: 'Óptica' },
+  { value: 'restaurant', label: 'Restaurante', enabled: true },
+  { value: 'barber shop', label: 'Barbería (próximamente)', enabled: false },
+  { value: 'optical', label: 'Óptica (próximamente)', enabled: false },
 ] as const;
 
 export default function SetupBusinessForm({
@@ -18,8 +19,13 @@ export default function SetupBusinessForm({
   initialName: string;
   initialType: string;
 }) {
+  const router = useRouter();
   const [name, setName] = useState(initialName);
-  const [businessType, setBusinessType] = useState(initialType);
+  const [businessType, setBusinessType] = useState(
+    BUSINESS_TYPES.some((t) => t.enabled && t.value === initialType)
+      ? initialType
+      : 'restaurant'
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,9 +47,18 @@ export default function SetupBusinessForm({
       const formData = new FormData();
       formData.set('businessName', name.trim());
       formData.set('businessType', businessType);
-      await retryBusinessSetupAction(formData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
+
+      const result = await retryBusinessSetupAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      router.push('/dashboard');
+      router.refresh();
+    } catch {
+      setError('No se pudo crear tu negocio. Inténtalo de nuevo.');
       setLoading(false);
     }
   }
@@ -93,9 +108,10 @@ export default function SetupBusinessForm({
             onChange={(e) => setBusinessType(e.target.value)}
             className="h-12 w-full rounded-xl border border-black/10 bg-black/[0.02] px-4 text-sm outline-none focus:border-black/30"
           >
-            <option value="" disabled>Selecciona una opción</option>
             {BUSINESS_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+              <option key={t.value} value={t.value} disabled={!t.enabled}>
+                {t.label}
+              </option>
             ))}
           </select>
         </label>

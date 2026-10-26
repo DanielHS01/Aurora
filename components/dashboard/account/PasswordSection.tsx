@@ -35,15 +35,17 @@ export default function PasswordSection() {
       formData.set("password", password);
       formData.set("confirmPassword", confirmPassword);
 
-      await updatePasswordAction(formData);
+      const result = await updatePasswordAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
 
       setSuccess(true);
       setPassword("");
       setConfirmPassword("");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Ocurrió un error inesperado."
-      );
+    } catch {
+      setError("No se pudo actualizar la contraseña. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }

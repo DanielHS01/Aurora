@@ -86,10 +86,14 @@ function MemberRow({ member }: { member: BusinessMember }) {
   async function handleRoleChange(newRole: BusinessRole) {
     setLoading(true);
     try {
-      await updateEmployeeRoleAction(member.user_id, newRole);
+      const result = await updateEmployeeRoleAction(member.user_id, newRole);
+      if (!result.ok) {
+        alert(result.error);
+        return;
+      }
       router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      alert('No se pudo completar la acción. Recarga la página e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -98,14 +102,17 @@ function MemberRow({ member }: { member: BusinessMember }) {
   async function handleToggleActive() {
     setLoading(true);
     try {
-      if (member.is_active) {
-        await deactivateEmployeeAction(member.user_id);
-      } else {
-        await reactivateEmployeeAction(member.user_id);
+      const result = member.is_active
+        ? await deactivateEmployeeAction(member.user_id)
+        : await reactivateEmployeeAction(member.user_id);
+
+      if (!result.ok) {
+        alert(result.error);
+        return;
       }
       router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      alert('No se pudo completar la acción. Recarga la página e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -188,11 +195,16 @@ function InviteModal({
       formData.set('email', email.trim());
       formData.set('role', role);
 
-      await inviteEmployeeAction(formData);
+      const result = await inviteEmployeeAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
       setSuccess(true);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      setError('No se pudo enviar la invitación. Inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }

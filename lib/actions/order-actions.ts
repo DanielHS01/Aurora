@@ -1,6 +1,10 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireBusinessAccess } from '@/lib/auth/session'
+import { createClient } from '@/lib/supabase/server'
+import { UserFacingError } from '@/lib/errors'
+import { runAction, type ActionResult } from '@/lib/utils/actionResult'
 import {
   createOrder,
   addOrderItem,
@@ -10,51 +14,80 @@ import {
   cancelOrder,
   getActiveOrderForTable,
 } from '@/lib/queries/orders'
-import { getKitchenTicketByOrderId, updateKitchenTicketStatus } from '@/lib/queries/kitchen'
 import { updateTableStatus } from '@/lib/queries/tables'
-import type { OrderStatus, OrderType } from '@/lib/types'
-import { revalidatePath } from 'next/cache'
+import {
+  getActiveKitchenTicketByOrderId,
+  updateKitchenTicketStatus,
+} from '@/lib/queries/kitchen'
 import { assertCashRegisterOpen } from '@/lib/queries/cashRegister'
+import { serveReadyItems } from '@/lib/queries/kitchenFlow'
+import type { Order, OrderStatus, OrderType } from '@/lib/types'
 
-export async function createOrderAction(formData: FormData) {
-  const businessId = formData.get('businessId') as string
-  const tableId = (formData.get('tableId') as string) || null
-  const customerId = (formData.get('customerId') as string) || null
-  const orderType = (formData.get('orderType') as OrderType) || 'dine_in'
+/**
+ * Una pantalla de pedido abierta antes de que eliminaran o agotaran un
+ * plato podría seguir agregándolo: el servidor es quien decide.
+ */
+async function assertProductOrderable(productId: string, businessId: string) {
+  const supabase = await createClient()
 
-  await requireBusinessAccess(businessId)
-  await assertCashRegisterOpen(businessId)
+  const { data: product } = await supabase
+    .from('products')
+    .select('is_available, is_sold_out')
+    .eq('id', productId)
+    .eq('business_id', businessId)
+    .maybeSingle()
 
-  // Solo evita duplicados si hay mesa — un pedido para llevar sin mesa
-  // no tiene "mesa activa" contra la cual comparar, así que este chequeo
-  // no aplica en ese caso.
-  if (tableId) {
-    const existing = await getActiveOrderForTable(tableId)
-    if (existing) {
-      return existing
+  if (!product || product.is_available === false) {
+    throw new UserFacingError('Este plato ya no está en el menú. Recarga la página.')
+  }
+  if (product.is_sold_out) {
+    throw new UserFacingError('Este plato está agotado.')
+  }
+}
+
+export async function createOrderAction(formData: FormData): Promise<ActionResult<Order>> {
+  return runAction(async () => {
+    const businessId = formData.get('businessId') as string
+    const tableId = (formData.get('tableId') as string) || null
+    const customerId = (formData.get('customerId') as string) || null
+    const orderType = (formData.get('orderType') as OrderType) || 'dine_in'
+
+    await requireBusinessAccess(businessId)
+    await assertCashRegisterOpen(businessId)
+
+    // Solo evita duplicados si hay mesa: un pedido para llevar no tiene
+    // "mesa activa" contra la cual comparar.
+    if (tableId) {
+      const existing = await getActiveOrderForTable(tableId)
+      if (existing) return existing
     }
-  }
 
-  const order = await createOrder({
-    business_id: businessId,
-    table_id: tableId,
-    customer_id: customerId,
-    order_type: orderType,
+    const order = await createOrder({
+      business_id: businessId,
+      table_id: tableId,
+      customer_id: customerId,
+      order_type: orderType,
+    })
+
+    if (tableId) {
+      await updateTableStatus(tableId, 'occupied')
+    }
+
+    revalidatePath('/dashboard/tables')
+    return order
   })
-
-  if (tableId) {
-    await updateTableStatus(tableId, 'occupied')
-  }
-
-  revalidatePath('/dashboard/tables')
-  return order
 }
 
 export async function addOrderItemAction(businessId: string, formData: FormData) {
-  await requireBusinessAccess(businessId)
+  const productId = (formData.get('productId') as string) || null
+
+  // En paralelo para no sumar una espera más a cada plato que se agrega
+  await Promise.all([
+    requireBusinessAccess(businessId),
+    productId ? assertProductOrderable(productId, businessId) : Promise.resolve(),
+  ])
 
   const orderId = formData.get('orderId') as string
-  const productId = (formData.get('productId') as string) || null
   const productName = (formData.get('productName') as string)?.trim()
   const quantity = Number(formData.get('quantity') ?? 1)
   const unitPrice = Number(formData.get('unitPrice'))
@@ -140,9 +173,8 @@ export async function cancelOrderAction(
   await requireBusinessAccess(businessId)
   await cancelOrder(orderId)
 
-  // El pedido cancelado no debe dejar un ticket de cocina activo
-  // colgado — si existe, se cancela junto con el pedido.
-  const ticket = await getKitchenTicketByOrderId(orderId)
+  // El pedido cancelado no debe dejar un ticket de cocina activo colgado
+  const ticket = await getActiveKitchenTicketByOrderId(orderId)
   if (ticket) {
     await updateKitchenTicketStatus(ticket.id, 'cancelled')
   }
@@ -155,15 +187,19 @@ export async function cancelOrderAction(
   revalidatePath('/dashboard/tables')
   revalidatePath('/dashboard/kitchen')
 }
+
+/**
+ * Para llevar y domicilio: entrega los platos que están listos. Como el
+ * pedido solo pasa a "ready" cuando TODO está listo, en la práctica entrega
+ * todo de una vez.
+ */
 export async function markOrderPickedUpAction(orderId: string, businessId: string) {
   await requireBusinessAccess(businessId)
 
-  const ticket = await getKitchenTicketByOrderId(orderId)
-  if (ticket) {
-    await updateKitchenTicketStatus(ticket.id, 'delivered')
+  const { servedItemIds } = await serveReadyItems(orderId, businessId)
+  if (servedItemIds.length === 0) {
+    throw new UserFacingError('No hay platos listos en este pedido')
   }
-
-  await updateOrderStatus(orderId, 'served')
 
   revalidatePath('/dashboard/orders')
   revalidatePath('/dashboard/kitchen')

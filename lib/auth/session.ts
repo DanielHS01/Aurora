@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Business, BusinessRole } from '@/lib/types'
 import { assertNotInMaintenance } from '@/lib/utils/maintenanceGuard'
+import { UserFacingError } from '@/lib/errors'
 
 /**
  * Devuelve el usuario autenticado actual, o null si no hay sesión.
@@ -88,7 +89,7 @@ export async function requireBusinessAccess(businessId: string): Promise<void> {
   const user = await getCurrentUser()
 
   if (!user) {
-    throw new Error('No autenticado')
+    throw new UserFacingError('No autenticado')
   }
 
   await assertNotInMaintenance()
@@ -98,6 +99,6 @@ export async function requireBusinessAccess(businessId: string): Promise<void> {
   })
 
   if (error || !data) {
-    throw new Error('No tienes acceso a este negocio')
+    throw new UserFacingError('No tienes acceso a este negocio')
   }
 }
