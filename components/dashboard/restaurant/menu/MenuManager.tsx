@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiX } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiEyeOff, FiSearch, FiX } from 'react-icons/fi';
 
 import { deactivateMenuCategoryAction } from '@/lib/actions/menu-actions';
 import { useRouter } from 'next/navigation';
@@ -14,6 +14,7 @@ import ProductCard from './ProductCard';
 import ProductDetailModal from './ProductDetailModal';
 import EditProductModal from './EditProductModal';
 import ProductOptionsModal from './ProductOptionsModal';
+import InactiveProductsButton from './InactiveProductsButton';
 
 interface MenuManagerProps {
   businessId: string;
@@ -29,6 +30,7 @@ export default function MenuManager({
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [pageError, setPageError] = useState('');
 
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
@@ -80,16 +82,20 @@ export default function MenuManager({
   async function handleDeactivateCategory(categoryId: string) {
     if (
       !confirm(
-        '¿Desactivar esta categoría? Sus productos dejarán de aparecer en el menú.'
+        '¿Desactivar esta categoría? Dejará de aparecer en el menú junto con sus productos.'
       )
     ) {
       return;
     }
+
+    setPageError('');
     try {
       await deactivateMenuCategoryAction(categoryId, businessId);
       router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      setPageError(
+        'No se pudo desactivar la categoría. Recarga la página e inténtalo de nuevo.'
+      );
     }
   }
 
@@ -99,7 +105,7 @@ export default function MenuManager({
         <h2 className="text-sm font-medium uppercase tracking-wide text-black/40">
           Categorías
         </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-full sm:w-64">
             <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/30" />
             <input
@@ -118,6 +124,9 @@ export default function MenuManager({
               </button>
             )}
           </div>
+
+          <InactiveProductsButton businessId={businessId} />
+
           <button
             onClick={() => setShowCreateCategory(true)}
             className="flex shrink-0 items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90"
@@ -127,6 +136,15 @@ export default function MenuManager({
           </button>
         </div>
       </div>
+
+      {pageError && (
+        <div
+          role="alert"
+          className="-mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+        >
+          {pageError}
+        </div>
+      )}
 
       {searchQuery && (
         <p className="-mt-6 text-xs text-black/40">
@@ -171,10 +189,11 @@ export default function MenuManager({
               </button>
               <button
                 onClick={() => handleDeactivateCategory(category.id)}
-                aria-label="Eliminar categoría"
+                aria-label="Desactivar categoría"
+                title="Desactivar categoría"
                 className="rounded-lg p-2 text-black/40 hover:bg-red-50 hover:text-red-600"
               >
-                <FiTrash2 size={15} />
+                <FiEyeOff size={15} />
               </button>
               <button
                 onClick={() => setCreateProductForCategoryId(category.id)}

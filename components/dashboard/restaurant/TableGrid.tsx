@@ -1,20 +1,21 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FiPlus, FiEdit2 } from 'react-icons/fi';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FiPlus, FiEdit2 } from "react-icons/fi";
 
-import type { BusinessArea } from '@/lib/types';
-import type { RestaurantTableWithArea } from '@/lib/queries/tables';
-import type { Database } from '@/lib/types/database.types';
-import { createOrderAction } from '@/lib/actions/order-actions';
-import { markOrderServedAction } from '@/lib/actions/kitchen-actions';
-import CreateTableModal from './CreateTableModal';
-import EditTableModal from './EditTableModal';
-import CheckoutModal from './orders/CheckoutModal';
+import type { BusinessArea } from "@/lib/types";
+import type { RestaurantTableWithArea } from "@/lib/queries/tables";
+import type { Database } from "@/lib/types/database.types";
+import { createOrderAction } from "@/lib/actions/order-actions";
+import { markOrderServedAction } from "@/lib/actions/kitchen-actions";
+import CreateTableModal from "./CreateTableModal";
+import EditTableModal from "./EditTableModal";
+import CheckoutModal from "./orders/CheckoutModal";
+import { deriveOrderStatus } from "@/lib/utils/kitchenFlow";
 
-type Order = Database['public']['Tables']['orders']['Row'];
-type OrderItem = Database['public']['Tables']['order_items']['Row'];
+type Order = Database["public"]["Tables"]["orders"]["Row"];
+type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
 
 export type TableWithOrder = RestaurantTableWithArea & {
   activeOrder: (Order & { order_items: OrderItem[] | null }) | null;
@@ -28,21 +29,31 @@ interface TableGridProps {
 
 function getStatusDotClass(status: string | null): string {
   switch (status) {
-    case 'available': return 'bg-emerald-500';
-    case 'occupied': return 'bg-red-500';
-    case 'reserved': return 'bg-orange-500';
-    case 'inactive': return 'bg-gray-300';
-    default: return 'bg-gray-300';
+    case "available":
+      return "bg-emerald-500";
+    case "occupied":
+      return "bg-red-500";
+    case "reserved":
+      return "bg-orange-500";
+    case "inactive":
+      return "bg-gray-300";
+    default:
+      return "bg-gray-300";
   }
 }
 
 function getStatusLabel(status: string | null): string {
   switch (status) {
-    case 'available': return 'Libre';
-    case 'occupied': return 'Ocupada';
-    case 'reserved': return 'Reservada';
-    case 'inactive': return 'Inactiva';
-    default: return 'Sin estado';
+    case "available":
+      return "Libre";
+    case "occupied":
+      return "Ocupada";
+    case "reserved":
+      return "Reservada";
+    case "inactive":
+      return "Inactiva";
+    default:
+      return "Sin estado";
   }
 }
 
@@ -70,7 +81,7 @@ export default function TableGrid({
 
   function updateTableLocal(tableId: string, updates: Partial<TableWithOrder>) {
     setTables((prev) =>
-      prev.map((t) => (t.id === tableId ? { ...t, ...updates } : t))
+      prev.map((t) => (t.id === tableId ? { ...t, ...updates } : t)),
     );
   }
 
@@ -102,7 +113,7 @@ export default function TableGrid({
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {tables.map((table) => {
-            const isReady = table.activeOrder?.status === 'ready';
+            const isReady = table.activeOrder?.status === "ready";
 
             return (
               <button
@@ -110,10 +121,10 @@ export default function TableGrid({
                 onClick={() => setSelectedTableId(table.id)}
                 className={`text-left p-6 rounded-2xl border transition-all duration-200 ${
                   isReady
-                    ? 'bg-emerald-400 text-black border-transparent shadow-lg animate-pulse'
-                    : table.status === 'occupied'
-                    ? 'bg-black text-white border-transparent shadow-lg'
-                    : 'bg-white border-black/10 text-black hover:border-black/30'
+                    ? "bg-emerald-400 text-black border-transparent shadow-lg animate-pulse"
+                    : table.status === "occupied"
+                      ? "bg-black text-white border-transparent shadow-lg"
+                      : "bg-white border-black/10 text-black hover:border-black/30"
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -126,7 +137,9 @@ export default function TableGrid({
                   />
                 </div>
                 <p className="text-xs opacity-60 uppercase mt-1 tracking-wider">
-                  {isReady ? '🍽️ Listo para recoger' : getStatusLabel(table.status)}
+                  {isReady
+                    ? "🍽️ Hay platos listos"
+                    : getStatusLabel(table.status)}
                 </p>
                 <p className="text-xs opacity-50 mt-2">
                   {table.capacity} personas
@@ -135,7 +148,7 @@ export default function TableGrid({
                 {table.activeOrder && (
                   <p className="text-xs opacity-50 mt-1">
                     {(table.activeOrder.order_items ?? []).length} ítem(s) · $
-                    {(table.activeOrder.total ?? 0).toLocaleString('es-CO')}
+                    {(table.activeOrder.total ?? 0).toLocaleString("es-CO")}
                   </p>
                 )}
               </button>
@@ -153,19 +166,34 @@ export default function TableGrid({
             setEditingTableId(selectedTable.id);
             setSelectedTableId(null);
           }}
-          onOrderServed={() =>
-            updateTableLocal(selectedTable.id, {
-              activeOrder: selectedTable.activeOrder
-                ? { ...selectedTable.activeOrder, status: 'served' }
-                : null,
-            })
-          }
           onCheckoutComplete={() =>
             updateTableLocal(selectedTable.id, {
               status: 'available',
               activeOrder: null,
             })
           }
+          onOrderServed={() => {
+            const order = selectedTable.activeOrder;
+            if (!order) return;
+
+            const items = (order.order_items ?? []).map((item) =>
+              item.status === "ready"
+                ? { ...item, status: "served" as OrderItem["status"] }
+                : item,
+            );
+            updateTableLocal(selectedTable.id, {
+              activeOrder: {
+                ...order,
+                order_items: items,
+                status:
+                  deriveOrderStatus(
+                    items.map((i) => i.status),
+                    "dine_in",
+                  ) ?? order.status,
+              },
+            });
+            
+          }}
         />
       )}
 
@@ -206,7 +234,7 @@ function TableDetailModal({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [checkoutOrder, setCheckoutOrder] = useState<{
     orderId: string;
     total: number;
@@ -215,31 +243,37 @@ function TableDetailModal({
   const orderItems = table.activeOrder?.order_items ?? [];
 
   async function handleNewOrder() {
-    setLoading(true);
-    setError('');
-    try {
-      const formData = new FormData();
-      formData.set('businessId', businessId);
-      formData.set('tableId', table.id);
-      formData.set('orderType', 'dine_in');
+  setLoading(true);
+  setError('');
+  try {
+    const formData = new FormData();
+    formData.set('businessId', businessId);
+    formData.set('tableId', table.id);
+    formData.set('orderType', 'dine_in');
 
-      const order = await createOrderAction(formData);
-      router.push(`/dashboard/orders/${order.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+    const result = await createOrderAction(formData);
+    if (!result.ok) {
+      setError(result.error);
       setLoading(false);
+      return;
     }
+
+    router.push(`/dashboard/orders/${result.data.id}`);
+  } catch {
+    setError('No se pudo completar la acción. Recarga la página e inténtalo de nuevo.');
+    setLoading(false);
   }
+}
 
   async function handleMarkServed() {
     if (!table.activeOrder) return;
     setLoading(true);
-    setError('');
+    setError("");
     try {
       await markOrderServedAction(table.activeOrder.id, businessId);
       onOrderServed();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(err instanceof Error ? err.message : "Ocurrió un error.");
     } finally {
       setLoading(false);
     }
@@ -256,7 +290,9 @@ function TableDetailModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-xl font-semibold">Mesa {table.table_number}</h3>
-          <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(table.status)}`} />
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(table.status)}`}
+          />
         </div>
 
         <p className="mb-4 text-xs text-black/40">
@@ -265,7 +301,10 @@ function TableDetailModal({
         </p>
 
         {error && (
-          <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+          >
             {error}
           </div>
         )}
@@ -277,19 +316,34 @@ function TableDetailModal({
             </p>
             <ul className="divide-y divide-black/5">
               {orderItems.map((item) => (
-                <li key={item.id} className="flex justify-between py-2 text-sm">
+                <li
+                  key={item.id}
+                  className={`flex justify-between py-2 text-sm ${item.status === "served" ? "opacity-40" : ""}`}
+                >
                   <span>
                     {item.quantity}x {item.product_name}
+                    {item.status === "ready" && (
+                      <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                        Listo
+                      </span>
+                    )}
+                    {item.status === "preparing" && (
+                      <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                        Preparando
+                      </span>
+                    )}
                   </span>
                   <span className="text-black/60">
-                    ${(item.total_price ?? 0).toLocaleString('es-CO')}
+                    ${(item.total_price ?? 0).toLocaleString("es-CO")}
                   </span>
                 </li>
               ))}
             </ul>
             <div className="flex justify-between border-t border-black/10 pt-3 font-medium">
               <span>Total</span>
-              <span>${(table.activeOrder.total ?? 0).toLocaleString('es-CO')}</span>
+              <span>
+                ${(table.activeOrder.total ?? 0).toLocaleString("es-CO")}
+              </span>
             </div>
           </div>
         ) : (
@@ -305,26 +359,28 @@ function TableDetailModal({
               disabled={loading}
               className="w-full rounded-xl bg-[var(--brand-primary)] py-2.5 text-sm font-medium text-[var(--brand-secondary)] disabled:opacity-60"
             >
-              {loading ? 'Creando...' : 'Nuevo pedido'}
+              {loading ? "Creando..." : "Nuevo pedido"}
             </button>
           )}
 
           {table.activeOrder && (
             <>
               <button
-                onClick={() => router.push(`/dashboard/orders/${table.activeOrder!.id}`)}
+                onClick={() =>
+                  router.push(`/dashboard/orders/${table.activeOrder!.id}`)
+                }
                 className="w-full rounded-xl border border-black/10 py-2.5 text-sm font-medium text-black/70 hover:bg-black/5"
               >
                 Ver / editar pedido
               </button>
 
-              {table.activeOrder.status === 'ready' && (
+              {table.activeOrder.status === "ready" && (
                 <button
                   onClick={handleMarkServed}
                   disabled={loading}
                   className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-medium text-white disabled:opacity-60"
                 >
-                  {loading ? 'Procesando...' : '🍽️ Recoger pedido'}
+                  {loading ? 'Procesando...' : '🍽️ Recoger platos listos'}
                 </button>
               )}
 

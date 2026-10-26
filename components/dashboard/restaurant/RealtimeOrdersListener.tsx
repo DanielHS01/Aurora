@@ -56,7 +56,7 @@ export default function RealtimeOrdersListener({
             const table = tables.find((t) => t.id === newRow.table_id);
             const label = table ? `Mesa ${table.table_number}` : 'Un pedido';
 
-            showToast(`🍽️ ${label} está listo para recoger`);
+            showToast(`🍽️ ${label} tiene platos listos para recoger`);
             audioRef.current?.play().catch(() => {});
           }
 

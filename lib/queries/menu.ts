@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { UserFacingError } from '@/lib/errors'
 import type {
   MenuCategory,
   Product,
@@ -171,21 +173,28 @@ export async function updateProduct(
 }
 
 /**
- * Soft-delete también aquí: is_available = false en vez de borrar.
- * Un producto borrado de verdad rompería el historial de order_items
- * pasados (aunque product_id usa ON DELETE SET NULL, perderías la
- * referencia al producto original en pedidos ya facturados).
+ * "Eliminar" un plato = is_available = false (soft-delete). Un borrado
+ * real dejaría los pedidos ya facturados sin referencia al producto
+ * original. getFullMenu y getProducts ocultan los platos con esta marca,
+ * y se pueden reactivar desde "Platos desactivados". La receta se conserva.
  */
 export async function deactivateProduct(productId: string): Promise<void> {
   const supabase = await createClient()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .update({ is_available: false })
     .eq('id', productId)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     throw new Error(`Error desactivando producto: ${error.message}`)
+  }
+
+  // Sin fila actualizada: el producto no existe o no es del usuario (RLS)
+  if (!data) {
+    throw new UserFacingError('Producto no encontrado')
   }
 }
 
@@ -318,7 +327,7 @@ export async function deleteProductOptionValue(valueId: string): Promise<void> {
 }
 
 // ============================================================================
-// MENÚ COMPLETO (para pantallas de cliente / QR / vista pública)
+// MENÚ COMPLETO (pantallas de pedidos, cocina, inventario, bot de IA)
 // ============================================================================
 
 export type CategoryWithProducts = MenuCategory & {
@@ -327,8 +336,11 @@ export type CategoryWithProducts = MenuCategory & {
 
 /**
  * Trae el menú completo de un negocio: categorías → productos → opciones →
- * valores, todo anidado en una sola llamada. Pensado para la vista pública
- * de un restaurante (menú digital), donde necesitas todo de una vez.
+ * valores, todo anidado en una sola llamada.
+ *
+ * Los productos eliminados (is_available = false) no se incluyen, así que
+ * desaparecen de todas las pantallas que usan el menú y el bot de IA no los
+ * ofrece.
  *
  * Nota de rendimiento: hace 1 query con joins anidados de Supabase en vez
  * de N+1 consultas manuales. Si el menú crece mucho (cientos de productos
@@ -354,8 +366,15 @@ export async function getFullMenu(businessId: string): Promise<CategoryWithProdu
     .order('sort_order', { ascending: true })
 
   if (error || !data) return []
-  return data as CategoryWithProducts[]
+
+  const categories = data as CategoryWithProducts[]
+
+  return categories.map((category) => ({
+    ...category,
+    products: (category.products ?? []).filter((p) => p.is_available !== false),
+  }))
 }
+
 export async function toggleProductSoldOut(
   productId: string,
   isSoldOut: boolean
@@ -370,4 +389,176 @@ export async function toggleProductSoldOut(
   if (error) {
     throw new Error(`Error actualizando disponibilidad: ${error.message}`)
   }
+}
+// ============================================================================
+// PLATOS DESACTIVADOS (el botón "Eliminar" solo los oculta; aquí se reactivan)
+// ============================================================================
+
+export type InactiveProduct = {
+  id: string
+  name: string
+  price: number
+  image_url: string | null
+  category_id: string | null
+  category_name: string | null
+  category_active: boolean
+}
+
+export type ActiveCategoryOption = { id: string; name: string }
+
+export async function getInactiveProducts(businessId: string): Promise<{
+  products: InactiveProduct[]
+  activeCategories: ActiveCategoryOption[]
+}> {
+  const supabase = await createClient()
+
+  // Dos consultas en paralelo en vez de un join: las categorías son pocas
+  const [{ data: products }, { data: categories }] = await Promise.all([
+    supabase
+      .from('products')
+      .select('id, name, price, image_url, category_id')
+      .eq('business_id', businessId)
+      .eq('is_available', false)
+      .order('name', { ascending: true }),
+    supabase
+      .from('menu_categories')
+      .select('id, name, is_active, sort_order')
+      .eq('business_id', businessId)
+      .order('sort_order', { ascending: true }),
+  ])
+
+  const byId = new Map((categories ?? []).map((c) => [c.id, c]))
+
+  return {
+    products: (products ?? []).map((p) => {
+      const category = p.category_id ? byId.get(p.category_id) : undefined
+      return {
+        id: p.id,
+        name: p.name,
+        price: Number(p.price),
+        image_url: p.image_url,
+        category_id: p.category_id,
+        category_name: category?.name ?? null,
+        category_active: category ? category.is_active !== false : false,
+      }
+    }),
+    activeCategories: (categories ?? [])
+      .filter((c) => c.is_active !== false)
+      .map((c) => ({ id: c.id, name: c.name })),
+  }
+}
+
+/**
+ * Vuelve a activar un plato. Si su categoría fue desactivada (o ya no
+ * existe), hay que indicar una categoría activa: si no, quedaría activo
+ * pero invisible, porque el menú solo muestra categorías activas.
+ */
+export async function reactivateProduct(
+  productId: string,
+  businessId: string,
+  newCategoryId?: string
+): Promise<{ removedArchivedIngredients: number }> {
+  const supabase = await createClient()
+
+  const { data: product } = await supabase
+    .from('products')
+    .select('id, category_id, is_available')
+    .eq('id', productId)
+    .eq('business_id', businessId)
+    .maybeSingle()
+
+  if (!product) throw new UserFacingError('Producto no encontrado')
+  // Ya estaba activo (doble clic, otra pestaña): no hay nada que hacer
+  if (product.is_available !== false) return { removedArchivedIngredients: 0 }
+
+  let categoryId = product.category_id
+  let currentCategoryActive = false
+
+  if (product.category_id) {
+    const { data: category } = await supabase
+      .from('menu_categories')
+      .select('is_active')
+      .eq('id', product.category_id)
+      .eq('business_id', businessId)
+      .maybeSingle()
+    currentCategoryActive = Boolean(category && category.is_active !== false)
+  }
+
+  if (!currentCategoryActive) {
+    if (!newCategoryId) {
+      throw new UserFacingError(
+        'La categoría de este plato fue desactivada. Elige una categoría para reactivarlo.'
+      )
+    }
+
+    const { data: chosen } = await supabase
+      .from('menu_categories')
+      .select('id, is_active')
+      .eq('id', newCategoryId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!chosen || chosen.is_active === false) {
+      throw new UserFacingError('La categoría elegida no es válida')
+    }
+    categoryId = newCategoryId
+  }
+
+  const { error } = await supabase
+    .from('products')
+    .update({ is_available: true, category_id: categoryId })
+    .eq('id', productId)
+    .eq('business_id', businessId)
+
+  if (error) throw new Error(`Error reactivando producto: ${error.message}`)
+
+  // Insumos archivados mientras el plato estuvo desactivado: se quitan de
+  // su receta para que no quede apuntando a algo que ya no se usa.
+  const admin = createAdminClient()
+
+  const { data: lines } = await admin
+    .from('product_components')
+    .select('id, item_id')
+    .eq('product_id', productId)
+    .eq('business_id', businessId)
+
+  if (!lines || lines.length === 0) return { removedArchivedIngredients: 0 }
+
+  const { data: archived } = await admin
+    .from('inventory_items')
+    .select('id')
+    .in('id', lines.map((l) => l.item_id))
+    .eq('is_active', false)
+
+  const archivedIds = new Set((archived ?? []).map((a) => a.id))
+  const toRemove = lines.filter((l) => archivedIds.has(l.item_id)).map((l) => l.id)
+
+  if (toRemove.length > 0) {
+    await admin.from('product_components').delete().in('id', toRemove)
+  }
+
+  return { removedArchivedIngredients: toRemove.length }
+}
+
+/**
+ * Para evitar duplicados al crear: ¿ya hay un plato DESACTIVADO con este nombre?
+ */
+export async function findInactiveProductByName(
+  businessId: string,
+  name: string
+): Promise<{ id: string; name: string } | null> {
+  const supabase = await createClient()
+
+  // Se escapan % y _ para que el nombre se compare tal cual y no como patrón
+  const escaped = name.trim().replace(/[\\%_]/g, '\\$&')
+
+  const { data } = await supabase
+    .from('products')
+    .select('id, name')
+    .eq('business_id', businessId)
+    .eq('is_available', false)
+    .ilike('name', escaped)
+    .limit(1)
+
+  return data && data.length > 0 ? data[0] : null
 }

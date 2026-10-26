@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiEdit2, FiSliders, FiTrash2 } from 'react-icons/fi';
+import { FiEdit2, FiSliders, FiEyeOff } from 'react-icons/fi';
 
 import { deactivateProductAction } from '@/lib/actions/menu-actions';
 import type { CategoryWithProducts } from '@/lib/queries/menu';
@@ -26,16 +26,27 @@ export default function ProductDetailModal({
 }: ProductDetailModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleDeactivate() {
-    if (!confirm(`¿Eliminar "${product.name}" del menú?`)) return;
+    const confirmed = confirm(
+      `¿Desactivar "${product.name}"?\n\nDejará de aparecer en el menú y en los pedidos, pero no se pierde: puedes reactivarlo desde "Platos desactivados". Su receta y su historial se conservan.`
+    );
+    if (!confirmed) return;
+
     setLoading(true);
+    setError('');
     try {
-      await deactivateProductAction(product.id, businessId);
+      const result = await deactivateProductAction(product.id, businessId);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
       router.refresh();
       onClose();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      setError('No se pudo desactivar el plato. Recarga la página e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -83,6 +94,15 @@ export default function ProductDetailModal({
           )}
         </div>
 
+        {error && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+          >
+            {error}
+          </div>
+        )}
+
         <div className="mt-6 grid grid-cols-2 gap-2">
           <button
             onClick={onEdit}
@@ -105,9 +125,12 @@ export default function ProductDetailModal({
           disabled={loading}
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
         >
-          <FiTrash2 size={14} />
-          Eliminar del menú
+          <FiEyeOff size={14} />
+          {loading ? 'Desactivando...' : 'Desactivar del menú'}
         </button>
+        <p className="mt-1.5 text-center text-xs text-black/35">
+          Se puede reactivar desde &quot;Platos desactivados&quot;.
+        </p>
 
         <button
           onClick={onClose}

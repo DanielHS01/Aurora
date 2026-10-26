@@ -1,6 +1,8 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireBusinessAccess } from '@/lib/auth/session'
+import { getCurrentUserRole } from '@/lib/queries/business-users'
 import {
   createMenuCategory,
   updateMenuCategory,
@@ -9,14 +11,32 @@ import {
   updateProduct,
   deactivateProduct,
   createProductOption,
-  updateProductOption,
   deleteProductOption,
   createProductOptionValue,
-  updateProductOptionValue,
   deleteProductOptionValue,
+  findInactiveProductByName,
+  toggleProductSoldOut,
 } from '@/lib/queries/menu'
 import { TAX_PRESETS, type TaxPresetValue } from '@/lib/constants/taxPresets'
-import { revalidatePath } from 'next/cache'
+import { UserFacingError } from '@/lib/errors'
+import { runAction, type ActionResult } from '@/lib/utils/actionResult'
+import type { BusinessRole, Product } from '@/lib/types'
+
+const MENU_ROLES: BusinessRole[] = ['owner', 'admin', 'manager']
+const SOLD_OUT_ROLES: BusinessRole[] = ['owner', 'admin', 'manager', 'kitchen']
+
+async function requireRole(businessId: string, allowed: BusinessRole[], message: string) {
+  await requireBusinessAccess(businessId) // incluye el chequeo de mantenimiento
+
+  const role = await getCurrentUserRole(businessId)
+  if (!role || !allowed.includes(role)) {
+    throw new UserFacingError(message)
+  }
+}
+
+function requireMenuAccess(businessId: string) {
+  return requireRole(businessId, MENU_ROLES, 'No tienes permiso para gestionar el menú')
+}
 
 // ============================================================================
 // CATEGORÍAS
@@ -28,10 +48,10 @@ export async function createMenuCategoryAction(formData: FormData) {
   const description = (formData.get('description') as string)?.trim() || null
   const sortOrder = Number(formData.get('sortOrder') ?? 0)
 
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
 
   if (!name) {
-    throw new Error('El nombre de la categoría es obligatorio')
+    throw new UserFacingError('El nombre de la categoría es obligatorio')
   }
 
   await createMenuCategory({
@@ -49,13 +69,13 @@ export async function updateMenuCategoryAction(
   businessId: string,
   formData: FormData
 ) {
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
 
   const name = (formData.get('name') as string)?.trim()
   const description = (formData.get('description') as string)?.trim() || null
 
   if (!name) {
-    throw new Error('El nombre de la categoría es obligatorio')
+    throw new UserFacingError('El nombre de la categoría es obligatorio')
   }
 
   await updateMenuCategory(categoryId, { name, description })
@@ -63,7 +83,7 @@ export async function updateMenuCategoryAction(
 }
 
 export async function deactivateMenuCategoryAction(categoryId: string, businessId: string) {
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
   await deactivateMenuCategory(categoryId)
   revalidatePath('/dashboard/menu')
 }
@@ -82,41 +102,58 @@ function resolveTaxPreset(formData: FormData) {
   }
 }
 
-export async function createProductAction(formData: FormData) {
-  const businessId = formData.get('businessId') as string
-  const categoryId = (formData.get('categoryId') as string) || null
-  const name = (formData.get('name') as string)?.trim()
-  const description = (formData.get('description') as string)?.trim() || null
-  const price = Number(formData.get('price'))
-  const preparationTime = formData.get('preparationTime')
-    ? Number(formData.get('preparationTime'))
-    : null
+export async function createProductAction(
+  formData: FormData
+): Promise<ActionResult<Product>> {
+  return runAction(async () => {
+    const businessId = formData.get('businessId') as string
+    await requireMenuAccess(businessId)
 
-  await requireBusinessAccess(businessId)
+    const categoryId = (formData.get('categoryId') as string) || null
+    const name = (formData.get('name') as string)?.trim()
+    const description = (formData.get('description') as string)?.trim() || null
+    const price = Number(formData.get('price'))
+    const preparationTimeRaw = formData.get('preparationTime')
+    const preparationTime = preparationTimeRaw ? Number(preparationTimeRaw) : null
 
-  if (!name) {
-    throw new Error('El nombre del producto es obligatorio')
-  }
-  if (isNaN(price) || price < 0) {
-    throw new Error('El precio debe ser un número válido mayor o igual a 0')
-  }
+    if (!name) {
+      throw new UserFacingError('El nombre del producto es obligatorio')
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      throw new UserFacingError('El precio debe ser un número válido mayor o igual a 0')
+    }
+    if (
+      preparationTime !== null &&
+      (!Number.isFinite(preparationTime) || preparationTime < 0)
+    ) {
+      throw new UserFacingError('El tiempo de preparación no es válido')
+    }
 
-  const { tax_code, tax_rate, tax_is_excluded } = resolveTaxPreset(formData)
+    // Evita duplicados: un plato "eliminado" solo está desactivado y se reactiva
+    const inactive = await findInactiveProductByName(businessId, name)
+    if (inactive) {
+      throw new UserFacingError(
+        `Ya tienes un plato desactivado llamado "${inactive.name}". Reactívalo desde "Platos desactivados" en lugar de crearlo de nuevo. Si es un plato distinto, cámbiale el nombre a uno de los dos.`
+      )
+    }
 
-  const product = await createProduct({
-    business_id: businessId,
-    category_id: categoryId,
-    name,
-    description,
-    price,
-    preparation_time_minutes: preparationTime,
-    tax_code,
-    tax_rate,
-    tax_is_excluded,
+    const { tax_code, tax_rate, tax_is_excluded } = resolveTaxPreset(formData)
+
+    const product = await createProduct({
+      business_id: businessId,
+      category_id: categoryId,
+      name,
+      description,
+      price,
+      preparation_time_minutes: preparationTime,
+      tax_code,
+      tax_rate,
+      tax_is_excluded,
+    })
+
+    revalidatePath('/dashboard/menu')
+    return product
   })
-
-  revalidatePath('/dashboard/menu')
-  return product
 }
 
 export async function updateProductAction(
@@ -124,7 +161,7 @@ export async function updateProductAction(
   businessId: string,
   formData: FormData
 ) {
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
 
   const name = (formData.get('name') as string)?.trim()
   const description = (formData.get('description') as string)?.trim() || null
@@ -132,15 +169,15 @@ export async function updateProductAction(
   const categoryId = (formData.get('categoryId') as string) || null
 
   if (!name) {
-    throw new Error('El nombre del producto es obligatorio')
+    throw new UserFacingError('El nombre del producto es obligatorio')
   }
-  if (isNaN(price) || price < 0) {
-    throw new Error('El precio debe ser un número válido mayor o igual a 0')
+  if (!Number.isFinite(price) || price < 0) {
+    throw new UserFacingError('El precio debe ser un número válido mayor o igual a 0')
   }
 
   // El preset de impuesto solo se toca si el formulario lo incluyó
-  // (formulario del Plan Básico, sin Factus activo, no manda este
-  // campo en absoluto — así no se sobreescribe nada por accidente).
+  // (el formulario del Plan Básico, sin Factus activo, no manda este
+  // campo: así no se sobreescribe nada por accidente).
   const hasTaxPreset = formData.has('taxPreset')
   const taxFields = hasTaxPreset ? resolveTaxPreset(formData) : {}
 
@@ -154,10 +191,54 @@ export async function updateProductAction(
   revalidatePath('/dashboard/menu')
 }
 
-export async function deactivateProductAction(productId: string, businessId: string) {
-  await requireBusinessAccess(businessId)
-  await deactivateProduct(productId)
-  revalidatePath('/dashboard/menu')
+/**
+ * "Eliminar" un plato solo lo desactiva: conserva su historial y su
+ * receta, y se puede reactivar desde "Platos desactivados".
+ */
+export async function deactivateProductAction(
+  productId: string,
+  businessId: string
+): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireMenuAccess(businessId)
+    await deactivateProduct(productId)
+
+    revalidatePath('/dashboard/menu')
+    revalidatePath('/dashboard/inventory')
+  })
+}
+
+export async function updateProductImageAction(
+  productId: string,
+  businessId: string,
+  imageUrl: string
+): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireMenuAccess(businessId)
+    await updateProduct(productId, { image_url: imageUrl })
+
+    revalidatePath('/dashboard/menu')
+  })
+}
+
+/** Cocina (y quienes gestionan el menú) marcan un plato como agotado o disponible. */
+export async function toggleProductSoldOutAction(
+  productId: string,
+  businessId: string,
+  isSoldOut: boolean
+): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireRole(
+      businessId,
+      SOLD_OUT_ROLES,
+      'No tienes permiso para marcar disponibilidad de platos'
+    )
+    await toggleProductSoldOut(productId, isSoldOut)
+
+    revalidatePath('/dashboard/kitchen')
+    revalidatePath('/dashboard/orders')
+    revalidatePath('/dashboard/menu')
+  })
 }
 
 // ============================================================================
@@ -172,13 +253,13 @@ export async function createProductOptionAction(formData: FormData) {
   const minSelect = Number(formData.get('minSelect') ?? 0)
   const maxSelect = Number(formData.get('maxSelect') ?? 1)
 
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
 
   if (!name) {
-    throw new Error('El nombre de la opción es obligatorio')
+    throw new UserFacingError('El nombre de la opción es obligatorio')
   }
   if (minSelect > maxSelect) {
-    throw new Error('El mínimo de selección no puede ser mayor al máximo')
+    throw new UserFacingError('El mínimo de selección no puede ser mayor al máximo')
   }
 
   await createProductOption({
@@ -194,7 +275,7 @@ export async function createProductOptionAction(formData: FormData) {
 }
 
 export async function deleteProductOptionAction(optionId: string, businessId: string) {
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
   await deleteProductOption(optionId)
   revalidatePath('/dashboard/menu')
 }
@@ -205,10 +286,10 @@ export async function createProductOptionValueAction(formData: FormData) {
   const name = (formData.get('name') as string)?.trim()
   const extraPrice = Number(formData.get('extraPrice') ?? 0)
 
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
 
   if (!name) {
-    throw new Error('El nombre del valor es obligatorio')
+    throw new UserFacingError('El nombre del valor es obligatorio')
   }
 
   await createProductOptionValue({
@@ -222,39 +303,7 @@ export async function createProductOptionValueAction(formData: FormData) {
 }
 
 export async function deleteProductOptionValueAction(valueId: string, businessId: string) {
-  await requireBusinessAccess(businessId)
+  await requireMenuAccess(businessId)
   await deleteProductOptionValue(valueId)
-  revalidatePath('/dashboard/menu')
-}
-export async function updateProductImageAction(
-  productId: string,
-  businessId: string,
-  imageUrl: string
-) {
-  await requireBusinessAccess(businessId)
-  await updateProduct(productId, { image_url: imageUrl })
-  revalidatePath('/dashboard/menu')
-}
-import { getCurrentUserRole } from '@/lib/queries/business-users'
-import { toggleProductSoldOut } from '@/lib/queries/menu'
-import type { BusinessRole } from '@/lib/types'
-
-const ROLES_THAT_CAN_TOGGLE_STOCK: BusinessRole[] = ['owner', 'admin', 'manager', 'kitchen']
-
-export async function toggleProductSoldOutAction(
-  productId: string,
-  businessId: string,
-  isSoldOut: boolean
-) {
-  await requireBusinessAccess(businessId)
-
-  const role = await getCurrentUserRole(businessId)
-  if (!role || !ROLES_THAT_CAN_TOGGLE_STOCK.includes(role)) {
-    throw new Error('No tienes permiso para marcar disponibilidad de platos')
-  }
-
-  await toggleProductSoldOut(productId, isSoldOut)
-  revalidatePath('/dashboard/kitchen')
-  revalidatePath('/dashboard/orders')
   revalidatePath('/dashboard/menu')
 }

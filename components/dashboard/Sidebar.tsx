@@ -79,13 +79,21 @@ export default function Sidebar({
   const cashRegisterItem = canManageCash
     ? [{ name: "Caja", path: "/dashboard/cash-register" }]
     : [];
+  const canManageInventory = ["owner", "admin", "manager"].includes(
+    userRole ?? "",
+  );
+
+  const inventoryItem =
+    businessType === "restaurant" && canManageInventory
+      ? [{ name: "Inventario", path: "/dashboard/inventory" }]
+      : [];
 
   const menuItems = [
     ...baseMenuItems,
     ...adminOnlyItems,
     ...cashRegisterItem,
+    ...inventoryItem,
     ...platformAdminItems,
-    
   ];
 
   return (

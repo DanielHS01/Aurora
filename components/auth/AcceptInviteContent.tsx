@@ -30,23 +30,28 @@ export default function AcceptInviteContent() {
 
     setStatus("verifying");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: type as "invite",
-    });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as "invite",
+      });
 
-    if (error) {
+      if (error) {
+        setStatus("error");
+        setErrorMessage(
+          error.message.toLowerCase().includes("expired")
+            ? "Esta invitación ya expiró o ya fue usada. Pide que te reenvíen el correo."
+            : "No pudimos validar la invitación."
+        );
+        return;
+      }
+
+      setStatus("set-password");
+    } catch {
       setStatus("error");
-      setErrorMessage(
-        error.message.toLowerCase().includes("expired")
-          ? "Esta invitación ya expiró o ya fue usada. Pide que te reenvíen el correo."
-          : "No pudimos validar la invitación."
-      );
-      return;
+      setErrorMessage("No pudimos validar la invitación. Revisa tu conexión e inténtalo de nuevo.");
     }
-
-    setStatus("set-password");
   }, [tokenHash, type]);
 
   async function handleSetPassword(e: React.FormEvent<HTMLFormElement>) {
@@ -63,13 +68,19 @@ export default function AcceptInviteContent() {
     }
 
     try {
-      await completeEmployeeInviteAction(password);
+      const result = await completeEmployeeInviteAction(password);
+      if (!result.ok) {
+        setErrorMessage(result.error);
+        return;
+      }
+
       setStatus("success");
-      setTimeout(() => router.push("/dashboard"), 1200);
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Ocurrió un error inesperado."
-      );
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 1200);
+    } catch {
+      setErrorMessage("No se pudo completar el registro. Inténtalo de nuevo.");
     }
   }
 
@@ -111,7 +122,7 @@ export default function AcceptInviteContent() {
             </h2>
 
             {errorMessage && (
-              <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <div role="alert" className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                 {errorMessage}
               </div>
             )}

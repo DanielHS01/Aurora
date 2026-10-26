@@ -30,23 +30,28 @@ export default function UpdatePasswordContent() {
 
     setStatus("verifying");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: type as "recovery",
-    });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as "recovery",
+      });
 
-    if (error) {
+      if (error) {
+        setStatus("error");
+        setErrorMessage(
+          error.message.toLowerCase().includes("expired")
+            ? "Este enlace ya expiró o ya fue usado. Solicita uno nuevo."
+            : "No pudimos validar el enlace."
+        );
+        return;
+      }
+
+      setStatus("set-password");
+    } catch {
       setStatus("error");
-      setErrorMessage(
-        error.message.toLowerCase().includes("expired")
-          ? "Este enlace ya expiró o ya fue usado. Solicita uno nuevo."
-          : "No pudimos validar el enlace."
-      );
-      return;
+      setErrorMessage("No pudimos validar el enlace. Revisa tu conexión e inténtalo de nuevo.");
     }
-
-    setStatus("set-password");
   }, [tokenHash, type]);
 
   async function handleSetPassword(e: React.FormEvent<HTMLFormElement>) {
@@ -66,12 +71,20 @@ export default function UpdatePasswordContent() {
       const formData = new FormData();
       formData.set("password", password);
       formData.set("confirmPassword", confirmPassword);
-      await updatePasswordAction(formData);
+
+      const result = await updatePasswordAction(formData);
+      if (!result.ok) {
+        setErrorMessage(result.error);
+        return;
+      }
 
       setStatus("success");
-      setTimeout(() => router.push("/dashboard"), 1200);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Ocurrió un error inesperado.");
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 1200);
+    } catch {
+      setErrorMessage("No se pudo actualizar la contraseña. Inténtalo de nuevo.");
     }
   }
 

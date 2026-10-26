@@ -19,10 +19,16 @@ export default function ResetPasswordPage() {
     try {
       const formData = new FormData();
       formData.set("email", email);
-      await requestPasswordResetAction(formData);
+
+      const result = await requestPasswordResetAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
       setSent(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ocurrió un error inesperado.");
+    } catch {
+      setError("No se pudo enviar el enlace. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }

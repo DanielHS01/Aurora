@@ -8,51 +8,69 @@ import {
   deactivateMaintenanceAnnouncement,
 } from '@/lib/queries/platformAdmin'
 import { saveFactusCredentials } from '@/lib/queries/factusCredentials'
+import { UserFacingError } from '@/lib/errors'
+import { runAction, type ActionResult } from '@/lib/utils/actionResult'
 
-export async function createMaintenanceAnnouncementAction(formData: FormData) {
-  const isAdmin = await isPlatformAdmin()
-  if (!isAdmin) {
-    throw new Error('No tienes permiso para esta acción')
-  }
+export async function createMaintenanceAnnouncementAction(
+  formData: FormData
+): Promise<ActionResult> {
+  return runAction(async () => {
+    if (!(await isPlatformAdmin())) {
+      throw new UserFacingError('No tienes permiso para esta acción')
+    }
 
-  const user = await getCurrentUser()
-  if (!user) throw new Error('No autenticado')
+    const user = await getCurrentUser()
+    if (!user) throw new UserFacingError('Tu sesión expiró. Inicia sesión de nuevo.')
 
-  const scheduledDate = formData.get('scheduledDate') as string
-  const scheduledTime = formData.get('scheduledTime') as string
-  const durationMinutes = Number(formData.get('durationMinutes'))
-  const extraMessage = (formData.get('extraMessage') as string)?.trim() || null
+    const scheduledDate = formData.get('scheduledDate') as string
+    const scheduledTime = formData.get('scheduledTime') as string
+    const durationMinutes = Number(formData.get('durationMinutes'))
+    const extraMessage = (formData.get('extraMessage') as string)?.trim() || null
 
-  if (!scheduledDate || !scheduledTime) {
-    throw new Error('La fecha y hora son obligatorias')
-  }
-  if (!durationMinutes || durationMinutes < 1) {
-    throw new Error('La duración debe ser mayor a 0 minutos')
-  }
+    if (!scheduledDate || !scheduledTime) {
+      throw new UserFacingError('La fecha y hora son obligatorias')
+    }
+    if (!Number.isFinite(durationMinutes) || durationMinutes < 1) {
+      throw new UserFacingError('La duración debe ser mayor a 0 minutos')
+    }
 
-  await createMaintenanceAnnouncement(
-    user.id,
-    scheduledDate,
-    scheduledTime,
-    durationMinutes,
-    extraMessage
-  )
+    // La hora ingresada es hora de Colombia (UTC-5)
+    const endMs =
+      new Date(`${scheduledDate}T${scheduledTime.slice(0, 5)}:00-05:00`).getTime() +
+      durationMinutes * 60000
+    if (Number.isNaN(endMs) || endMs < Date.now()) {
+      throw new UserFacingError(
+        'Ese horario ya pasó. Elige una fecha y hora futuras (hora de Colombia).'
+      )
+    }
 
-  revalidatePath('/admin/maintenance')
-  revalidatePath('/dashboard')
+    await createMaintenanceAnnouncement(
+      user.id,
+      scheduledDate,
+      scheduledTime,
+      durationMinutes,
+      extraMessage
+    )
+
+    revalidatePath('/admin/maintenance')
+    revalidatePath('/dashboard')
+  })
 }
 
-export async function deactivateMaintenanceAnnouncementAction(id: string) {
-  const isAdmin = await isPlatformAdmin()
-  if (!isAdmin) {
-    throw new Error('No tienes permiso para esta acción')
-  }
+export async function deactivateMaintenanceAnnouncementAction(
+  id: string
+): Promise<ActionResult> {
+  return runAction(async () => {
+    if (!(await isPlatformAdmin())) {
+      throw new UserFacingError('No tienes permiso para esta acción')
+    }
 
-  await deactivateMaintenanceAnnouncement(id)
-  revalidatePath('/admin/maintenance')
-  revalidatePath('/dashboard')
+    await deactivateMaintenanceAnnouncement(id)
+
+    revalidatePath('/admin/maintenance')
+    revalidatePath('/dashboard')
+  })
 }
-
 /**
  * Guarda las credenciales de Factus de un negocio — solo superadmin.
  * A diferencia de Wompi, el negocio NUNCA pega sus propias

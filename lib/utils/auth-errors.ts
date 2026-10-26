@@ -11,6 +11,8 @@ export function translateAuthError(message: string): string {
     'email not confirmed': 'Debes confirmar tu correo antes de iniciar sesión',
     'user already registered': 'Ya existe una cuenta con este correo',
     'password should be at least 6 characters': 'La contraseña debe tener al menos 6 caracteres',
+    'password is known to be weak': 'Esa contraseña es muy común o apareció en filtraciones de datos. Elige otra',
+    'weak password': 'La contraseña es muy débil. Usa una más larga y variada',
     'unable to validate email address: invalid format': 'El formato del correo no es válido',
     'email rate limit exceeded': 'Se enviaron demasiados correos. Espera unos minutos e intenta de nuevo',
     'for security purposes, you can only request this once every': 'Espera un momento antes de solicitar esto de nuevo',
@@ -24,6 +26,6 @@ export function translateAuthError(message: string): string {
     if (normalized.includes(key)) return translated
   }
 
-  // Fallback genérico — nunca exponemos el mensaje crudo si no lo reconocemos
+  // Fallback genérico: nunca exponemos el mensaje crudo si no lo reconocemos
   return 'Ocurrió un error. Intenta de nuevo en unos momentos'
 }

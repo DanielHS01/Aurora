@@ -1,13 +1,16 @@
-'use client'
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FiX, FiCheck } from 'react-icons/fi';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FiX, FiCheck } from "react-icons/fi";
 
-import { createProductAction } from '@/lib/actions/menu-actions';
-import { TAX_PRESETS, type TaxPresetValue } from '@/lib/constants/taxPresets';
-import type { Product } from '@/lib/types';
-import ProductImageUploader from './ProductImageUploader';
+import { createProductAction } from "@/lib/actions/menu-actions";
+import { TAX_PRESETS, type TaxPresetValue } from "@/lib/constants/taxPresets";
+import type { Product } from "@/lib/types";
+import ProductImageUploader from "./ProductImageUploader";
+import RecipeSection from "./RecipeSection";
+import { listInventoryItemsAction } from "@/lib/actions/inventoryActions";
+import type { InventoryItem } from "@/lib/queries/inventory";
 
 interface CreateProductModalProps {
   businessId: string;
@@ -23,13 +26,41 @@ export default function CreateProductModal({
   onClose,
 }: CreateProductModalProps) {
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [preparationTime, setPreparationTime] = useState('');
-  const [taxPreset, setTaxPreset] = useState<TaxPresetValue>('');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [preparationTime, setPreparationTime] = useState("");
+  const [taxPreset, setTaxPreset] = useState<TaxPresetValue>("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [recipeDirty, setRecipeDirty] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[] | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    listInventoryItemsAction(businessId)
+      .then((result) => {
+        if (!cancelled) setInventoryItems(result);
+      })
+      // Sin permiso o sin inventario: la sección simplemente no aparece
+      .catch(() => {
+        if (!cancelled) setInventoryItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+  function handleDone() {
+    if (
+      recipeDirty &&
+      !confirm("Tienes una receta sin guardar. ¿Salir sin guardarla?")
+    )
+      return;
+    router.refresh();
+    onClose();
+  }
 
   // Cuando el producto ya se creó, guardamos aquí el objeto — su
   // existencia decide si mostramos el formulario (paso 1) o el
@@ -38,34 +69,41 @@ export default function CreateProductModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (!name.trim()) {
-      setError('El nombre del producto es obligatorio.');
+      setError("El nombre del producto es obligatorio.");
       return;
     }
     const priceNum = Number(price);
     if (Number.isNaN(priceNum) || priceNum < 0) {
-      setError('El precio debe ser un número válido.');
+      setError("El precio debe ser un número válido.");
       return;
     }
 
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.set('businessId', businessId);
-      formData.set('categoryId', categoryId);
-      formData.set('name', name.trim());
-      formData.set('description', description.trim());
-      formData.set('price', price);
-      if (preparationTime) formData.set('preparationTime', preparationTime);
-      if (isFactusActive) formData.set('taxPreset', taxPreset);
+      formData.set("businessId", businessId);
+      formData.set("categoryId", categoryId);
+      formData.set("name", name.trim());
+      formData.set("description", description.trim());
+      formData.set("price", price);
+      if (preparationTime) formData.set("preparationTime", preparationTime);
+      if (isFactusActive) formData.set("taxPreset", taxPreset);
 
-      const product = await createProductAction(formData);
-      setCreatedProduct(product);
-      router.refresh();
+      const result = await createProductAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setCreatedProduct(result.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo crear el plato. Inténtalo de nuevo.",
+      );
     } finally {
       setLoading(false);
     }
@@ -77,21 +115,23 @@ export default function CreateProductModal({
       onClick={createdProduct ? undefined : onClose}
     >
       <div
-        className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {createdProduct ? (
           <>
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold">¡Producto creado!</h3>
-              <button onClick={onClose} className="text-black/40 hover:text-black">
+              <button
+                onClick={onClose}
+                className="text-black/40 hover:text-black"
+              >
                 <FiX size={20} />
               </button>
             </div>
 
             <p className="mb-5 text-sm text-black/50">
-              Puedes agregarle una foto ahora, o hacerlo después desde el
-              menú.
+              Puedes agregarle una foto ahora, o hacerlo después desde el menú.
             </p>
 
             <ProductImageUploader
@@ -99,9 +139,15 @@ export default function CreateProductModal({
               productId={createdProduct.id}
               currentImageUrl={null}
             />
+            <RecipeSection
+              businessId={businessId}
+              productId={createdProduct.id}
+              items={inventoryItems}
+              onDirtyChange={setRecipeDirty}
+            />
 
             <button
-              onClick={onClose}
+              onClick={handleDone}
               className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)]"
             >
               <FiCheck size={15} />
@@ -112,7 +158,10 @@ export default function CreateProductModal({
           <>
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Nuevo producto</h3>
-              <button onClick={onClose} className="text-black/40 hover:text-black">
+              <button
+                onClick={onClose}
+                className="text-black/40 hover:text-black"
+              >
                 <FiX size={20} />
               </button>
             </div>
@@ -191,7 +240,9 @@ export default function CreateProductModal({
                   <select
                     id="productTax"
                     value={taxPreset}
-                    onChange={(e) => setTaxPreset(e.target.value as TaxPresetValue)}
+                    onChange={(e) =>
+                      setTaxPreset(e.target.value as TaxPresetValue)
+                    }
                     className="h-12 w-full rounded-xl border border-black/10 bg-black/[0.02] px-4 text-sm outline-none focus:border-black/30"
                   >
                     {TAX_PRESETS.map((p) => (
@@ -208,7 +259,7 @@ export default function CreateProductModal({
                 disabled={loading}
                 className="h-12 w-full rounded-xl bg-[var(--brand-primary)] text-sm font-medium text-[var(--brand-secondary)] transition hover:opacity-90 disabled:opacity-60"
               >
-                {loading ? 'Creando...' : 'Crear producto'}
+                {loading ? "Creando..." : "Crear producto"}
               </button>
             </form>
           </>

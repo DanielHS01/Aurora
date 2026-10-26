@@ -70,13 +70,19 @@ export default function ProductImageUploader({
       const uploadData = await uploadRes.json();
       const secureUrl = uploadData.secure_url as string;
 
-      await updateProductImageAction(productId, businessId, secureUrl);
+      const saved = await updateProductImageAction(productId, businessId, secureUrl);
+      if (!saved.ok) {
+        setError(`La imagen se subió, pero no se pudo guardar: ${saved.error}`);
+        return;
+      }
 
       setPreviewUrl(secureUrl);
       router.refresh();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Ocurrió un error inesperado.'
+        err instanceof Error
+          ? err.message
+          : 'No se pudo subir la imagen. Inténtalo de nuevo.'
       );
     } finally {
       setUploading(false);

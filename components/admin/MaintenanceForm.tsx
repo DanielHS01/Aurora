@@ -9,6 +9,9 @@ import {
 } from '@/lib/actions/platformAdminActions';
 import type { MaintenanceAnnouncement } from '@/lib/queries/platformAdmin';
 
+const inputClass =
+  'h-11 w-full rounded-xl border border-black/10 bg-black/[0.02] px-3 text-sm text-black outline-none focus:border-black/30';
+
 export default function MaintenanceForm({
   activeAnnouncement,
 }: {
@@ -39,13 +42,18 @@ export default function MaintenanceForm({
       formData.set('durationMinutes', duration);
       formData.set('extraMessage', extraMessage.trim());
 
-      await createMaintenanceAnnouncementAction(formData);
+      const result = await createMaintenanceAnnouncementAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
       router.refresh();
       setDate('');
       setTime('');
       setExtraMessage('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      setError('No se pudo publicar el aviso. Recarga la página e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -53,12 +61,17 @@ export default function MaintenanceForm({
 
   async function handleDeactivate() {
     if (!activeAnnouncement) return;
+    setError('');
     setLoading(true);
     try {
-      await deactivateMaintenanceAnnouncementAction(activeAnnouncement.id);
+      const result = await deactivateMaintenanceAnnouncementAction(activeAnnouncement.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error.');
+    } catch {
+      setError('No se pudo desactivar el aviso. Recarga la página e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -67,11 +80,12 @@ export default function MaintenanceForm({
   return (
     <div className="space-y-6">
       {activeAnnouncement && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <p className="mb-1 text-sm font-medium text-amber-400">Aviso activo</p>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="mb-1 text-sm font-medium text-amber-800">Aviso activo</p>
           <p className="text-sm text-black/70">
             {activeAnnouncement.scheduled_date} a las{' '}
-            {activeAnnouncement.scheduled_time.slice(0, 5)} · {activeAnnouncement.duration_minutes} min
+            {activeAnnouncement.scheduled_time.slice(0, 5)} (hora de Colombia) ·{' '}
+            {activeAnnouncement.duration_minutes} min
           </p>
           {activeAnnouncement.extra_message && (
             <p className="mt-1 text-xs text-black/50">{activeAnnouncement.extra_message}</p>
@@ -81,18 +95,19 @@ export default function MaintenanceForm({
             disabled={loading}
             className="mt-3 rounded-lg border border-black/20 px-3 py-1.5 text-xs text-black/70 hover:bg-black/5 disabled:opacity-50"
           >
-            Desactivar aviso
+            {loading ? 'Desactivando...' : 'Desactivar aviso'}
           </button>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-white/10 p-6">
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-black/10 p-6">
         <h2 className="text-sm font-medium uppercase tracking-wide text-black">
           Programar nuevo aviso
         </h2>
+        <p className="text-xs text-black/40">La fecha y la hora son hora de Colombia.</p>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -104,7 +119,7 @@ export default function MaintenanceForm({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="h-11 w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 text-sm text-black outline-none focus:border-white/30"
+              className={inputClass}
             />
           </label>
           <label className="block">
@@ -113,7 +128,7 @@ export default function MaintenanceForm({
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="h-11 w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 text-sm text-black outline-none focus:border-white/30"
+              className={inputClass}
             />
           </label>
         </div>
@@ -127,7 +142,7 @@ export default function MaintenanceForm({
             min={1}
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
-            className="h-11 w-full rounded-xl border border-black/10 bg-black/[0.03] px-4 text-sm text-black outline-none focus:border-white/30"
+            className={inputClass}
           />
         </label>
 
@@ -139,7 +154,7 @@ export default function MaintenanceForm({
             value={extraMessage}
             onChange={(e) => setExtraMessage(e.target.value)}
             placeholder="Ej: Estaremos mejorando el sistema de pedidos."
-            className="h-11 w-full rounded-xl border border-black/10 bg-black/[0.03] px-4 text-sm text-black outline-none focus:border-white/30"
+            className={inputClass}
           />
         </label>
 

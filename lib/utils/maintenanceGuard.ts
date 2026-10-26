@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { UserFacingError } from '@/lib/errors'
 
 let maintenanceCache: { value: boolean; expiresAt: number } | null = null
 const CACHE_TTL_MS = 15000
@@ -25,5 +26,5 @@ export async function assertNotInMaintenance(): Promise<void> {
   const { data: isPlatformAdmin } = await supabase.rpc('is_current_user_platform_admin')
   if (isPlatformAdmin) return
 
-  throw new Error('El sistema está en mantenimiento. Los cambios están deshabilitados temporalmente.')
+  throw new UserFacingError('El sistema está en mantenimiento. Los cambios están deshabilitados temporalmente.')
 }

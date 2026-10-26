@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { UserFacingError } from '@/lib/errors'
 
 export type CashRegisterSession = {
   id: string
@@ -16,7 +17,7 @@ export type CashRegisterSession = {
 export async function assertCashRegisterOpen(businessId: string): Promise<void> {
   const openSession = await getOpenCashSession(businessId)
   if (!openSession) {
-    throw new Error('No puedes tomar pedidos con la caja cerrada. Abre la caja primero desde la sección "Caja".')
+    throw new UserFacingError('No puedes tomar pedidos con la caja cerrada. Abre la caja primero desde la sección "Caja".')
   }
 }
 export async function getOpenCashSession(businessId: string): Promise<CashRegisterSession | null> {
@@ -49,9 +50,9 @@ export async function openCashRegisterSession(
     // El índice único de la DB rechaza esto si ya hay una caja abierta
     // — se traduce a un mensaje claro en vez del error crudo de Postgres.
     if (error.message.includes('one_open_session_per_business')) {
-      throw new Error('Ya hay una caja abierta para este negocio')
+      throw new UserFacingError('Ya hay una caja abierta para este negocio')
     }
-    throw new Error(`Error abriendo caja: ${error.message}`)
+    throw new UserFacingError(`Error abriendo caja: ${error.message}`)
   }
 
   return data
